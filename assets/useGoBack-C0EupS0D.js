@@ -1,1 +1,0 @@
-import{c as e}from"./index-NTkeuARG.js";function t(t=`/home`){let n=e();return()=>{window.history.length>1?n.back():n.replace(t)}}export{t};

@@ -1,1 +1,0 @@
-import{it as e,rt as t}from"./icon-BaM8xVUD.js";function n(n,{args:r=[],done:i,canceled:a,error:o}){if(n){let s=n.apply(null,r);t(s)?s.then(e=>{e?i():a&&a()}).catch(o||e):s?i():a&&a()}else i()}export{n as t};

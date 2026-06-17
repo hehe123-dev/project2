@@ -1,1 +1,0 @@
-import"./icon-BaM8xVUD.js";import"./swipe-item-CiFST3aQ.js";
