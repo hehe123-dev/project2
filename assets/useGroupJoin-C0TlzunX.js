@@ -1,0 +1,1 @@
+import{st as e}from"./runtime-core.esm-bundler-BcNFl82P.js";var t=e([1]);function n(){return{joinedGroups:t,isJoined:e=>t.value.includes(e),joinGroup:e=>{t.value.includes(e)||t.value.push(e)},leaveGroup:e=>{t.value=t.value.filter(t=>t!==e)}}}export{n as t};

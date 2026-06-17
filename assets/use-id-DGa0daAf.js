@@ -1,0 +1,1 @@
+import{y as e}from"./runtime-core.esm-bundler-BcNFl82P.js";var t=0;function n(){let{name:n=`unknown`}=e()?.type||{};return`${n}-${++t}`}export{n as t};

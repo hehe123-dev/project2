@@ -1,0 +1,1 @@
+var e=`/assets/logo-Do9XMkBC.jpeg`;export{e as t};

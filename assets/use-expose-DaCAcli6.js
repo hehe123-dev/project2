@@ -1,0 +1,1 @@
+import{y as e}from"./runtime-core.esm-bundler-BcNFl82P.js";import{Q as t}from"./icon-BaM8xVUD.js";function n(n){let r=e();r&&t(r.proxy,n)}export{n as t};

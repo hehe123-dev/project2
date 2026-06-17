@@ -1,0 +1,1 @@
+import{L as e,l as t,w as n}from"./runtime-core.esm-bundler-BcNFl82P.js";var r=Symbol(),i=Symbol(),a=()=>n(i,null),o=n=>{let o=a();e(r,n),e(i,t(()=>(o==null||o.value)&&n.value))};export{o as n,a as t};
