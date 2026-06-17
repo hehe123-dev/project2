@@ -51,7 +51,7 @@ Views.Login = function() {
     + '<div class="input-row"><input type="tel" id="login-phone" placeholder="请输入手机号" maxlength="11"><span style="font-size:18px;color:#999">' + iconSVG('phone', 18, '#999') + '</span></div>'
     + '<div class="input-row"><input type="digit" id="login-code" placeholder="请输入验证码" maxlength="6"><span class="code-btn" data-action="send-code">获取验证码</span></div>'
     + '<div class="mt-12">' + UI_Button('登录', 'primary', '', true, true) + '</div></div>'
-    + '<div class="agreement mt-12">登录即表示同意《用户协议》和《隐私政策》<br><a href="#/admin/login">运营管理员入口</a></div>'
+    + '<div class="agreement mt-12">登录即表示同意《用户协议》和《隐私政策》<br><a href="#/admin/login">运营管理员入口</a><br><span style="color:var(--danger)">[v250617-01] onclick版</span></div>'
     + '<div class="mt-12" style="padding:8px 16px;background:#fff4e5;border-radius:8px;font-size:11px;text-align:center">演示账号已内置，点击微信登录或手机号登录即可体验</div>'
     + '</div>';
 };
@@ -138,7 +138,7 @@ Views.Home = function() {
       f.images.forEach(function(img) { html += '<img src="' + img + '">'; });
       html += '</div>';
     }
-    html += '<div class="feed-actions"><span data-action="like-feed" data-id="' + f.id + '" style="color:' + (AppState.likedFeeds[f.id] ? 'var(--danger)' : '') + '">' + (AppState.likedFeeds[f.id] ? iconSVG('heartFilled', 14, 'var(--danger)') : iconSVG('heart', 14)) + ' ' + f.likes + '</span><span>' + iconSVG('message', 14) + ' ' + f.comments + '</span></div></div>';
+    html += '<div class="feed-actions"><span onclick="doLikeFeed(' + f.id + ')" style="color:' + (AppState.likedFeeds[f.id] ? 'var(--danger)' : '') + '">' + (AppState.likedFeeds[f.id] ? iconSVG('heartFilled', 14, 'var(--danger)') : iconSVG('heart', 14)) + ' ' + f.likes + '</span><span>' + iconSVG('message', 14) + ' ' + f.comments + '</span></div></div>';
   });
   html += '</div>';
   html += '</div>';
@@ -162,7 +162,18 @@ Views.NewsDetail = function() {
   var collected = AppState.collectedNews[n.id];
   var html = '<div class="page-container">' + UI_NavBar('资讯详情', true);
   html += '<div class="content-detail"><h3>' + escapeHtml(n.title) + '</h3><div class="meta">' + n.author + ' · ' + n.date + ' · ' + n.views + '阅读</div><div class="body">' + n.content + '</div></div>';
-  html += '<div class="bottom-bar-actions"><div class="bba-item' + (AppState.likedFeeds['n' + n.id] ? ' active' : '') + '" data-action="like-news" data-id="' + n.id + '">' + (AppState.likedFeeds['n' + n.id] ? iconSVG('heartFilled', 18, 'var(--danger)') : iconSVG('heart', 18)) + '<span>' + n.likes + '</span></div><div class="bba-item">' + iconSVG('message', 18) + '<span>' + n.comments + '</span></div><div class="bba-item' + (collected ? ' active' : '') + '" data-action="collect-news" data-id="' + n.id + '">' + (collected ? iconSVG('starFilled', 18, 'var(--accent)') : iconSVG('star', 18)) + '<span>' + (collected ? '已收藏' : '收藏') + '</span></div><div class="bba-item" data-action="toast" data-payload="已复制分享链接">' + iconSVG('share', 18) + '<span>分享</span></div></div></div>';
+  // Comment section
+  var showCmt = uiState.showNewsComment === n.id;
+  var cmts = (AppState.newsComments && AppState.newsComments[n.id]) || [];
+  if (showCmt) {
+    html += '<div class="comment-section"><div class="cmt-title">评论 (' + cmts.length + ')</div>';
+    if (cmts.length === 0) html += '<div style="text-align:center;padding:20px;color:var(--text-lighter)">暂无评论，来说两句吧</div>';
+    cmts.forEach(function(c) {
+      html += '<div class="comment-item"><img src="' + c.avatar + '"><div class="cmt-body"><div class="cmt-name">' + escapeHtml(c.name) + '</div><div class="cmt-text">' + escapeHtml(c.text) + '</div><div class="cmt-time">' + c.time + '</div></div></div>';
+    });
+    html += '<div style="display:flex;gap:10px;padding:8px 16px;background:#fff;border-top:1px solid var(--border)"><input id="news-comment-input" type="text" placeholder="写评论..." style="flex:1;background:#f5f6f8;border-radius:20px;padding:8px 14px;font-size:13px;border:none;outline:none"><span style="padding:8px 12px;color:var(--primary);font-weight:600;cursor:pointer;font-size:14px" onclick="doPostNewsComment(' + n.id + ')">发送</span></div>';
+  }
+  html += '<div class="bottom-bar-actions"><div class="bba-item' + (AppState.likedFeeds['n' + n.id] ? ' active' : '') + '" onclick="doLikeNews(' + n.id + ')">' + (AppState.likedFeeds['n' + n.id] ? iconSVG('heartFilled', 18, 'var(--danger)') : iconSVG('heart', 18)) + '<span>' + n.likes + '</span></div><div class="bba-item' + (showCmt ? ' active' : '') + '" onclick="doToggleNewsComment(' + n.id + ')">' + iconSVG('message', 18) + '<span>' + n.comments + '</span></div><div class="bba-item' + (collected ? ' active' : '') + '" onclick="doCollectNews(' + n.id + ')">' + (collected ? iconSVG('starFilled', 18, 'var(--accent)') : iconSVG('star', 18)) + '<span>' + (collected ? '已收藏' : '收藏') + '</span></div><div class="bba-item" onclick="doShare()">' + iconSVG('share', 18) + '<span>分享</span></div></div></div>';
   return html;
 };
 
@@ -196,7 +207,7 @@ Views.ActivityDetail = function() {
   html += '</div></div>';
   var btnText = registered ? '已报名' : (a.status === '报名中' ? '立即报名' : '报名已截止');
   var btnDisabled = registered || a.status !== '报名中';
-  html += '<div class="bottom-bar">' + UI_Button(btnText, btnDisabled ? 'outline' : 'primary', '', true, true) + '</div>';
+  html += '<div class="bottom-bar">' + (btnDisabled ? '<button class="comp-btn outline round block">' + btnText + '</button>' : '<button class="comp-btn primary round block" onclick="doRegisterActivity(' + a.id + ')">' + btnText + '</button>') + '</div>';
   html += '</div>';
   return html;
 };
@@ -250,7 +261,7 @@ Views.AlumniCardDetail = function() {
   }
   if (!exchanged) {
     var btnText = AppState.outgoingIds.indexOf(a.id) >= 0 ? '已发送请求' : '交换名片';
-    html += '<div class="bottom-bar"><span data-action="exchange-card-confirm" data-id="' + a.id + '" style="display:block;width:100%">' + UI_Button(btnText, 'primary', '', true, true) + '</span></div>';
+    html += '<div class="bottom-bar"><button class="comp-btn primary round block" onclick="doExchangeCard(' + a.id + ')">' + btnText + '</button></div>';
   }
   html += '</div>';
   return html;
@@ -301,7 +312,7 @@ Views.AlumniGroupDetail = function() {
     html += '</div>';
   }
   var joined = isJoined(g.id);
-  html += '<div class="bottom-bar">' + UI_Button(joined ? '退出社团' : '加入社团', joined ? 'outline' : 'primary', '', true, true) + '</div>';
+  html += '<div class="bottom-bar"><button class="comp-btn ' + (joined ? 'outline' : 'primary') + ' round block" onclick="doToggleGroup(' + g.id + ')">' + (joined ? '退出社团' : '加入社团') + '</button></div>';
   html += '</div>';
   return html;
 };
@@ -317,7 +328,7 @@ Views.AlumniFeedList = function() {
       f.images.forEach(function(img) { html += '<img src="' + img + '" data-action="preview-img" data-src="' + img + '">'; });
       html += '</div>';
     }
-    html += '<div class="feed-actions"><span data-action="like-feed" data-id="' + f.id + '" class="' + (AppState.likedFeeds[f.id] ? 'liked' : '') + '">' + (AppState.likedFeeds[f.id] ? iconSVG('heartFilled', 14, 'var(--danger)') : iconSVG('heart', 14)) + ' ' + f.likes + '</span><span>' + iconSVG('message', 14) + ' ' + f.comments + '</span></div></div>';
+    html += '<div class="feed-actions"><span onclick="doLikeFeed(' + f.id + ')" class="' + (AppState.likedFeeds[f.id] ? 'liked' : '') + '">' + (AppState.likedFeeds[f.id] ? iconSVG('heartFilled', 14, 'var(--danger)') : iconSVG('heart', 14)) + ' ' + f.likes + '</span><span>' + iconSVG('message', 14) + ' ' + f.comments + '</span></div></div>';
   });
   html += '</div>';
   return html;
@@ -335,7 +346,7 @@ Views.AlumniFeedDetail = function() {
     f.images.forEach(function(img) { html += '<img src="' + img + '" data-action="preview-img" data-src="' + img + '">'; });
     html += '</div>';
   }
-  html += '<div class="feed-actions"><span data-action="like-feed" data-id="' + f.id + '" class="' + (AppState.likedFeeds[f.id] ? 'liked' : '') + '">' + (AppState.likedFeeds[f.id] ? iconSVG('heartFilled', 14, 'var(--danger)') : iconSVG('heart', 14)) + ' ' + f.likes + '</span><span>' + iconSVG('message', 14) + ' ' + f.comments + '</span></div></div>';
+  html += '<div class="feed-actions"><span onclick="doLikeFeed(' + f.id + ')" class="' + (AppState.likedFeeds[f.id] ? 'liked' : '') + '">' + (AppState.likedFeeds[f.id] ? iconSVG('heartFilled', 14, 'var(--danger)') : iconSVG('heart', 14)) + ' ' + f.likes + '</span><span>' + iconSVG('message', 14) + ' ' + f.comments + '</span></div></div>';
   // Comments
   html += '<div class="comment-section"><div class="cmt-title">评论 (' + comments.length + ')</div>';
   comments.forEach(function(c) {
@@ -344,7 +355,7 @@ Views.AlumniFeedDetail = function() {
   if (!comments.length) html += '<div style="color:var(--text-lighter);text-align:center;padding:20px">暂无评论</div>';
   html += '</div>';
   // Comment input
-  html += '<div class="bottom-bar"><input id="feed-comment-input" type="text" placeholder="写评论..." style="flex:1;background:#f5f6f8;border-radius:20px;padding:8px 14px;font-size:13px"><span style="padding:8px 12px;color:var(--primary);font-weight:600;cursor:pointer;font-size:14px" data-action="post-comment" data-id="' + f.id + '">发送</span></div>';
+  html += '<div class="bottom-bar"><input id="feed-comment-input" type="text" placeholder="写评论..." style="flex:1;background:#f5f6f8;border-radius:20px;padding:8px 14px;font-size:13px"><span style="padding:8px 12px;color:var(--primary);font-weight:600;cursor:pointer;font-size:14px" onclick="doPostComment(' + f.id + ')">发送</span></div>';
   html += '</div>';
   return html;
 };
@@ -543,7 +554,7 @@ Views.TopicShareDetail = function() {
   var collected = AppState.collectedTopics[t.id];
   var html = '<div class="page-container">' + UI_NavBar('分享详情', true);
   html += '<div class="content-detail"><h3>' + escapeHtml(t.title) + '</h3><div class="meta">' + t.author + ' · ' + t.date + ' · ' + t.views + '阅读</div><div class="body">' + t.content + '</div></div>';
-  html += '<div class="bottom-bar-actions"><div class="bba-item" data-action="like-topic" data-id="' + t.id + '">' + (AppState.likedFeeds['t' + t.id] ? iconSVG('heartFilled', 18, 'var(--danger)') : iconSVG('heart', 18)) + '<span>' + t.likes + '</span></div><div class="bba-item' + (collected ? ' active' : '') + '" data-action="collect-topic" data-id="' + t.id + '">' + (collected ? iconSVG('starFilled', 18, 'var(--accent)') : iconSVG('star', 18)) + '<span>' + (collected ? '已收藏' : '收藏') + '</span></div><div class="bba-item" data-action="toast" data-payload="已复制分享链接">' + iconSVG('share', 18) + '<span>分享</span></div></div>';
+  html += '<div class="bottom-bar-actions"><div class="bba-item' + (AppState.likedFeeds['t' + t.id] ? ' active' : '') + '" onclick="doLikeTopic(' + t.id + ')">' + (AppState.likedFeeds['t' + t.id] ? iconSVG('heartFilled', 18, 'var(--danger)') : iconSVG('heart', 18)) + '<span>' + t.likes + '</span></div><div class="bba-item' + (collected ? ' active' : '') + '" onclick="doCollectTopic(' + t.id + ')">' + (collected ? iconSVG('starFilled', 18, 'var(--accent)') : iconSVG('star', 18)) + '<span>' + (collected ? '已收藏' : '收藏') + '</span></div><div class="bba-item" onclick="doShare()">' + iconSVG('share', 18) + '<span>分享</span></div></div>';
   html += '</div>';
   return html;
 };
@@ -565,7 +576,7 @@ Views.InterviewDetail = function() {
   var collected = AppState.collectedInterviews[item.id];
   var html = '<div class="page-container">' + UI_NavBar('专访详情', true);
   html += '<div class="content-detail"><h3>' + escapeHtml(item.title) + '</h3><div class="meta">' + item.author + ' · ' + item.date + ' · ' + item.views + '阅读</div><div class="body">' + item.content + '</div></div>';
-  html += '<div class="bottom-bar-actions"><div class="bba-item' + (AppState.likedFeeds['i' + item.id] ? ' active' : '') + '" data-action="like-interview" data-id="' + item.id + '">' + (AppState.likedFeeds['i' + item.id] ? iconSVG('heartFilled', 18, 'var(--danger)') : iconSVG('heart', 18)) + '<span>' + item.likes + '</span></div><div class="bba-item' + (collected ? ' active' : '') + '" data-action="collect-interview" data-id="' + item.id + '">' + (collected ? iconSVG('starFilled', 18, 'var(--accent)') : iconSVG('star', 18)) + '<span>' + (collected ? '已收藏' : '收藏') + '</span></div><div class="bba-item" data-action="toast" data-payload="已复制分享链接">' + iconSVG('share', 18) + '<span>分享</span></div></div>';
+  html += '<div class="bottom-bar-actions"><div class="bba-item' + (AppState.likedFeeds['i' + item.id] ? ' active' : '') + '" onclick="doLikeInterview(' + item.id + ')">' + (AppState.likedFeeds['i' + item.id] ? iconSVG('heartFilled', 18, 'var(--danger)') : iconSVG('heart', 18)) + '<span>' + item.likes + '</span></div><div class="bba-item' + (collected ? ' active' : '') + '" onclick="doCollectInterview(' + item.id + ')">' + (collected ? iconSVG('starFilled', 18, 'var(--accent)') : iconSVG('star', 18)) + '<span>' + (collected ? '已收藏' : '收藏') + '</span></div><div class="bba-item" onclick="doShare()">' + iconSVG('share', 18) + '<span>分享</span></div></div>';
   html += '</div>';
   return html;
 };
@@ -625,7 +636,7 @@ Views.CourseDetail = function() {
     html += '<div style="text-align:center;padding:20px"><img src="' + c.teacherAvatar + '" style="width:64px;height:64px;border-radius:50%;margin:0 auto"><div style="font-weight:600;margin:8px 0 4px">' + escapeHtml(c.teacher) + '</div><div style="font-size:12px;color:var(--text-lighter)">' + escapeHtml(c.teacherTitle) + '</div></div>';
     html += '<div class="content-detail"><div class="body">' + escapeHtml(c.teacherBio) + '</div></div>';
   }
-  html += '<div class="bottom-bar"><span style="flex:1;display:flex;gap:16px;align-items:center"><span data-action="share-course" data-id="' + c.id + '">' + iconSVG('share', 18, '#999') + '</span><span data-action="collect-course" data-id="' + c.id + '" style="color:' + (AppState.collectedCourses[c.id] ? 'var(--accent)' : '#999') + '">' + (AppState.collectedCourses[c.id] ? iconSVG('starFilled', 18, 'var(--accent)') : iconSVG('star', 18)) + '</span><span data-action="toast" data-payload="客服功能开发中">' + iconSVG('service', 18, '#999') + '</span></span>' + UI_Button(subscribed ? '已订阅' : '立即订阅 ¥' + c.price, subscribed ? 'outline' : 'primary', '', true) + '</div>';
+  html += '<div class="bottom-bar"><span style="flex:1;display:flex;gap:16px;align-items:center"><span onclick="doShare()">' + iconSVG('share', 18, '#999') + '</span><span onclick="doCollectCourse(' + c.id + ')" style="color:' + (AppState.collectedCourses[c.id] ? 'var(--accent)' : '#999') + '">' + (AppState.collectedCourses[c.id] ? iconSVG('starFilled', 18, 'var(--accent)') : iconSVG('star', 18)) + '</span><span onclick="showToast(\'客服功能开发中\')">' + iconSVG('service', 18, '#999') + '</span></span>' + (subscribed ? '<button class="comp-btn outline round block">已订阅</button>' : '<button class="comp-btn primary round block" onclick="doSubscribeCourse(' + c.id + ')">立即订阅 ¥' + c.price + '</button>') + '</div>';
   html += '</div>';
   return html;
 };
@@ -666,7 +677,7 @@ Views.GroupBuyDetail = function() {
   html += '<div style="display:flex;gap:4px;padding:4px 16px;flex-wrap:wrap">';
   g.tags.forEach(function(t) { html += UI_Tag(t, 'danger'); });
   html += '</div>';
-  html += '<div class="bottom-bar"><div class="comp-stepper"><button data-action="stepper-minus">-</button><input type="number" value="1" id="gb-qty" style="width:40px;text-align:center" readonly><button data-action="stepper-plus">+</button></div><span style="flex:1"></span>' + UI_Button('立即购买', 'primary', '', true) + '</div>';
+  html += '<div class="bottom-bar"><div class="comp-stepper"><button data-action="stepper-minus">-</button><input type="number" value="1" id="gb-qty" style="width:40px;text-align:center" readonly><button data-action="stepper-plus">+</button></div><span style="flex:1"></span><button class="comp-btn primary round" onclick="doBuy()">立即购买</button></div>';
   html += '</div>';
   return html;
 };

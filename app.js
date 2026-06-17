@@ -1,6 +1,10 @@
 // ================================================================
 // 白石桥七号 - 北理工校友商务平台 (Mobile)
 // ================================================================
+window.onerror = function(msg, src, line) {
+  var app = document.getElementById('app');
+  if (app) app.innerHTML = '<div style="padding:40px;text-align:center;color:red"><h2>JS Error</h2><p>' + msg + '</p><p>Source: ' + (src||'?') + ' Line: ' + (line||'?') + '</p></div>';
+};
 
 // ================================================================
 // SECTION A: MOCK DATA
@@ -564,16 +568,22 @@ function renderView() {
     document.getElementById('app').innerHTML = '<div class="page-container"><div class="empty-state">页面加载中...</div></div>';
     return;
   }
-  var html = Views[viewName]();
+  var html;
+  try {
+    html = Views[viewName]();
+  } catch (e) {
+    document.getElementById('app').innerHTML = '<div class="page-container"><div class="empty-state" style="padding:40px"><h3>页面渲染错误</h3><p style="color:var(--danger);margin:10px 0">' + escapeHtml(viewName) + '</p><p style="font-size:12px;color:var(--text-lighter)">' + escapeHtml(e.message) + '</p><p style="margin-top:10px"><a href="javascript:location.reload()">刷新页面</a></p></div></div>';
+    return;
+  }
   // Add tabbar
   if (showTabbar()) {
     html += UI_Tabbar(activeTabKey());
   }
   document.getElementById('app').innerHTML = html;
   // Init swipe
-  initSwipe();
+  try { initSwipe(); } catch(e) {}
   // Init search
-  initSearch();
+  try { initSearch(); } catch(e) {}
 }
 
 function initSwipe() {
@@ -606,8 +616,17 @@ function initSearch() {
 // ================================================================
 // SECTION I: EVENT DELEGATION
 // ================================================================
+function findActionTarget(el) {
+  while (el && el !== document.body) {
+    if (el.hasAttribute && el.hasAttribute('data-action')) return el;
+    el = el.parentElement || el.parentNode;
+  }
+  return null;
+}
+
 document.addEventListener('click', function(e) {
-  var target = e.target.closest('[data-action]');
+  var target = e.target.closest ? e.target.closest('[data-action]') : null;
+  if (!target) target = findActionTarget(e.target);
   if (!target) return;
   var action = target.dataset.action;
   var payload = target.dataset.payload;
@@ -912,9 +931,10 @@ document.addEventListener('click', function(e) {
   }
 });
 
-// Also handle login button clicks (they use UI_Button which just returns an HTML string)
+// Also handle button text clicks
 document.addEventListener('click', function(e) {
-  var btn = e.target.closest('.comp-btn');
+  var btn = e.target.closest ? e.target.closest('.comp-btn') : null;
+  if (!btn) { var el = e.target; while (el && el !== document.body) { if (el.classList && el.classList.contains('comp-btn')) { btn = el; break; } el = el.parentElement || el.parentNode; } }
   if (!btn) return;
   var text = btn.textContent.trim();
   if (text === '登录') {
@@ -974,6 +994,101 @@ document.addEventListener('input', function(e) {
     renderView();
   }
 });
+
+// ================================================================
+// SECTION H2: GLOBAL ACTION HANDLERS (for onclick)
+// ================================================================
+function doLikeNews(id) {
+  AppState.likedFeeds['n' + id] = !AppState.likedFeeds['n' + id];
+  var nd = newsList.find(function(n) { return n.id == id; });
+  if (nd) nd.likes += AppState.likedFeeds['n' + id] ? 1 : -1;
+  renderView();
+}
+function doCollectNews(id) {
+  AppState.collectedNews[id] = !AppState.collectedNews[id];
+  showToast(AppState.collectedNews[id] ? '已收藏' : '已取消收藏');
+  renderView();
+}
+function doShare() { showToast('已复制分享链接'); }
+function doToggleNewsComment(id) { uiState.showNewsComment = uiState.showNewsComment === id ? null : id; renderView(); }
+function doPostNewsComment(id) {
+  var input = document.getElementById('news-comment-input');
+  if (input && input.value.trim()) {
+    if (!AppState.newsComments) AppState.newsComments = {};
+    if (!AppState.newsComments[id]) AppState.newsComments[id] = [];
+    AppState.newsComments[id].push({ name: '演示用户', avatar: 'https://picsum.photos/seed/myavatar/100/100', text: input.value.trim(), time: new Date().toLocaleString() });
+    var nd = newsList.find(function(n) { return n.id == id; });
+    if (nd) nd.comments++;
+    uiState.showNewsComment = null;
+    renderView();
+  }
+}
+function doCollectTopic(id) {
+  AppState.collectedTopics[id] = !AppState.collectedTopics[id];
+  showToast(AppState.collectedTopics[id] ? '已收藏' : '已取消收藏');
+  renderView();
+}
+function doCollectInterview(id) {
+  AppState.collectedInterviews[id] = !AppState.collectedInterviews[id];
+  showToast(AppState.collectedInterviews[id] ? '已收藏' : '已取消收藏');
+  renderView();
+}
+function doLikeTopic(id) {
+  AppState.likedFeeds['t' + id] = !AppState.likedFeeds['t' + id];
+  var tp = topicList.find(function(t) { return t.id == id; });
+  if (tp) tp.likes += AppState.likedFeeds['t' + id] ? 1 : -1;
+  renderView();
+}
+function doLikeInterview(id) {
+  AppState.likedFeeds['i' + id] = !AppState.likedFeeds['i' + id];
+  var iv = interviewList.find(function(it) { return it.id == id; });
+  if (iv) iv.likes += AppState.likedFeeds['i' + id] ? 1 : -1;
+  renderView();
+}
+function doCollectCourse(id) {
+  AppState.collectedCourses[id] = !AppState.collectedCourses[id];
+  showToast(AppState.collectedCourses[id] ? '已收藏' : '已取消收藏');
+  renderView();
+}
+function doRegisterActivity(id) {
+  if (hasRegisteredAct(id)) return;
+  var act = activityList.find(function(a) { return a.id == id; });
+  if (act && act.fee > 0) {
+    showConfirm('该活动需支付 ¥' + act.fee + '，确认报名？', function() { registerActivity(id); showToast('报名成功'); renderView(); });
+  } else {
+    registerActivity(id); showToast('报名成功'); renderView();
+  }
+}
+function doExchangeCard(id) {
+  showConfirm('确认向该校友发送名片交换申请？', function() { sendRequest(id); showToast('名片交换请求已发送'); renderView(); });
+}
+function doToggleGroup(id) {
+  if (isJoined(id)) { leaveGroup(id); showToast('已退出社团'); }
+  else { joinGroup(id); showToast('已申请加入社团'); }
+  renderView();
+}
+function doSubscribeCourse(id) {
+  if (isSubscribedCourse(id)) { showToast('已订阅该课程'); return; }
+  var course = courseList.find(function(c) { return c.id == id; });
+  showConfirm('确认订阅《' + (course ? course.title : '') + '》？', function() { subscribeCourse(id); showToast('订阅成功'); renderView(); });
+}
+function doBuy() { showConfirm('确认购买？', function() { showToast('下单成功'); }); }
+function doPostComment(id) {
+  var input = document.getElementById('feed-comment-input');
+  if (input && input.value.trim()) {
+    if (!AppState.feedComments[id]) AppState.feedComments[id] = [];
+    AppState.feedComments[id].push({ name: '演示用户', avatar: 'https://picsum.photos/seed/myavatar/100/100', text: input.value.trim(), time: new Date().toLocaleString() });
+    input.value = '';
+    renderView();
+  }
+}
+
+function doLikeFeed(id) {
+  AppState.likedFeeds[id] = !AppState.likedFeeds[id];
+  var fd = feedList.find(function(f) { return f.id == id; });
+  if (fd) { fd.liked = AppState.likedFeeds[id]; fd.likes += AppState.likedFeeds[id] ? 1 : -1; }
+  renderView();
+}
 
 // ================================================================
 // SECTION J: BOOTSTRAP

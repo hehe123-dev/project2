@@ -1,0 +1,17 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"><title>Test</title></head>
+<body>
+<h2>测试1：直接写的button</h2>
+<button onclick="alert('直接onclick OK')">点我（直接HTML）</button>
+
+<h2>测试2：innerHTML生成的button</h2>
+<div id="area"></div>
+
+<script>
+function t1(){ alert('innerHTML onclick OK!'); }
+function t2(n){ alert('innerHTML onclick带参数 OK! id='+n); }
+document.getElementById('area').innerHTML =
+  '<button onclick="t1()" style="background:green;color:#fff;padding:12px 24px;font-size:16px">点我（innerHTML）</button> ' +
+  '<button onclick="t2(42)" style="background:blue;color:#fff;padding:12px 24px;font-size:16px">点我（innerHTML带参数）</button>';
+</script>
+</body></html>
