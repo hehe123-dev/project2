@@ -10,10 +10,12 @@ function showTabbar() {
   var p = r.path;
   var hidePaths = ['/login', '/news/:id', '/activity/:id', '/alumni-card/:id', '/alumni-group/:id',
     '/alumni-feed/:id', '/help/:id', '/member-card/:id', '/member-company/:id', '/member-product/:id',
-    '/member-service/:category', '/service-provider/:id', '/topic-share/:id', '/interview/:id',
+    '/member-service/:category', '/service-provider/:id', '/service-project/:id', '/service-chat/:providerId/:projectId',
+    '/topic-share/:id', '/interview/:id',
     '/courses/:id', '/group-buy/:id', '/publish-feed', '/publish-help', '/publish-activity',
     '/profile/edit', '/profile/subscribe', '/profile/group-buy', '/profile/favorites',
-    '/profile/activities', '/profile/member-edit', '/profile/my-feed', '/profile/my-groups',
+    '/profile/activities', '/profile/member-edit', '/profile/add-company', '/profile/add-product',
+    '/profile/my-feed', '/profile/my-groups',
     '/profile/my-help', '/profile/my-business', '/profile/my-topics', '/profile/points'
   ];
   for (var i = 0; i < hidePaths.length; i++) {
@@ -185,7 +187,9 @@ Views.ActivityList = function() {
     html += '<div class="activity-item" data-action="nav" data-payload="/activity/' + a.id + '"><img src="' + a.cover + '" class="act-thumb"><div class="act-info"><div class="act-title">' + escapeHtml(a.title) + '</div><div class="act-row">' + iconSVG('clock', 12, '#999') + ' ' + a.date + '</div><div class="act-row">' + iconSVG('location', 12, '#999') + ' ' + escapeHtml(a.location) + '</div><div class="act-bottom">' + UI_Tag(a.status, a.status === '报名中' ? 'danger' : 'plain') + '<span style="font-size:11px;color:var(--text-lighter)">' + a.registered + '人报名 ' + (a.fee === 0 ? '免费' : '¥' + a.fee) + '</span></div></div></div>';
   });
   html += '</div>';
-  html += '<div style="padding:10px 16px">' + UI_Button('发布校友活动', 'primary', '', true, true) + '</div>';
+  if (roleRank[AppState.currentRole] >= 2) {
+    html += '<div style="padding:10px 16px">' + UI_Button('发布校友活动', 'primary', '', true, true) + '</div>';
+  }
   html += '</div>';
   return html;
 };
@@ -201,7 +205,7 @@ Views.ActivityDetail = function() {
   html += '<div class="content-detail"><div class="body">' + escapeHtml(a.description) + '</div></div>';
   html += '<div style="padding:0 16px"><div class="section-title" style="padding:8px 0">已报名校友 (' + a.registered + '人)</div><div class="registered-avatars">';
   for (var i = 0; i < Math.min(a.registered, 8); i++) {
-    html += '<img src="https://picsum.photos/seed/reg' + i + '/60/60">';
+    html += '<img src="' + img('reg'+i, 60, 60) + '">';
   }
   if (a.registered > 8) html += '<span class="more">+' + (a.registered - 8) + '</span>';
   html += '</div></div>';
@@ -223,14 +227,53 @@ Views.PublishActivity = function() {
 
 // --- ALUMNI CARD ---
 Views.AlumniCardList = function() {
-  var html = '<div class="page-container">' + UI_NavBar('校友名片', true) + UI_Search('', '搜索校友...', 'alumni-search');
-  html += '<div class="card-list">';
+  var html = '<div class="page-container">' + UI_NavBar('校友名片', true);
+
+  // 搜索和筛选栏
+  html += '<div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--border)">';
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+  html += '<div style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;white-space:nowrap;display:flex;align-items:center;gap:4px">';
+  html += '<span>筛选</span>';
+  html += iconSVG('arrowDown', 12, '#999');
+  html += '</div>';
+  html += '<div style="flex:1;position:relative">';
+  html += '<input type="search" placeholder="搜索校友姓名/公司" style="width:100%;padding:6px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;outline:none;box-sizing:border-box">';
+  html += '</div>';
+  html += '</div></div>';
+
+  // 校友卡片列表
+  html += '<div style="padding:12px;background:#f5f5f5">';
   alumniList.forEach(function(a) {
     var stat = '';
-    if (isFriend(a.id)) stat = UI_Tag('已是好友', 'success');
-    else if (AppState.outgoingIds.indexOf(a.id) >= 0) stat = UI_Tag('已发送请求', 'plain');
-    else stat = UI_Button('交换名片', 'primary', 'small', true);
-    html += '<div class="comp-cell" data-action="nav" data-payload="/alumni-card/' + a.id + '"><img src="' + a.avatar + '" style="width:44px;height:44px;border-radius:50%;margin-right:10px"><div class="cell-body"><div class="cell-title">' + escapeHtml(a.name) + '</div><div class="cell-label">' + a.school + ' · ' + a.major + ' · ' + a.year + '</div></div>' + stat + '<span class="cell-arrow">' + iconSVG('arrowRight', 14, '#c8c9cc') + '</span></div>';
+    if (isFriend(a.id)) stat = '<span style="padding:4px 10px;background:#e8f5e9;color:#4caf50;border-radius:12px;font-size:12px">已是好友</span>';
+    else if (AppState.outgoingIds.indexOf(a.id) >= 0) stat = '<span style="padding:4px 10px;background:#f5f5f5;color:#999;border-radius:12px;font-size:12px">已发送请求</span>';
+    else stat = '<button class="comp-btn primary small" data-action="exchange-card" data-id="' + a.id + '" onclick="event.stopPropagation()">交换名片</button>';
+
+    html += '<div class="alumni-card" data-action="nav" data-payload="/alumni-card/' + a.id + '" style="background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06)">';
+
+    // 头部：头像+姓名+按钮
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">';
+    html += '<img src="' + a.avatar + '" style="width:56px;height:56px;border-radius:50%;flex-shrink:0">';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-size:16px;font-weight:600;margin-bottom:4px;color:#333">' + escapeHtml(a.name) + '</div>';
+    html += '<div style="font-size:12px;color:#999">' + escapeHtml(a.title) + '</div>';
+    html += '</div>';
+    html += '<div style="flex-shrink:0">' + stat + '</div>';
+    html += '</div>';
+
+    // 详细信息（分两行展示）
+    html += '<div style="padding-top:10px;border-top:1px solid #f0f0f0">';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:#666">';
+    html += '<div style="display:flex;align-items:center;gap:4px">' + iconSVG('building', 12, '#999') + '<span>' + escapeHtml(a.company) + '</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:4px">' + iconSVG('award', 12, '#999') + '<span>' + escapeHtml(a.school) + '</span></div>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:#666;margin-top:6px">';
+    html += '<div style="display:flex;align-items:center;gap:4px">' + iconSVG('users', 12, '#999') + '<span>' + escapeHtml(a.year) + '</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:4px"><span style="display:inline-block;padding:1px 8px;background:#e3f2fd;color:#1976d2;border-radius:4px;font-size:11px">' + escapeHtml(a.industry) + '</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:4px;color:#999"><span>' + escapeHtml(a.city) + '</span></div>';
+    html += '</div></div>';
+
+    html += '</div>';
   });
   html += '</div></div>';
   return html;
@@ -376,7 +419,9 @@ Views.HelpList = function() {
   helpList.forEach(function(h) {
     html += '<div class="comp-cell" data-action="nav" data-payload="/help/' + h.id + '"><img src="' + h.publisher.avatar + '" style="width:40px;height:40px;border-radius:50%;margin-right:10px"><div class="cell-body"><div class="cell-title">' + escapeHtml(h.title) + '</div><div class="cell-label">' + h.publisher.name + ' · ' + h.publisher.role + ' · ' + h.date + '</div></div>' + UI_Tag(h.status, h.status === '已解决' ? 'success' : 'warning') + '<span class="cell-arrow">' + iconSVG('arrowRight', 14, '#c8c9cc') + '</span></div>';
   });
-  html += '<div class="bottom-bar">' + UI_Button('发布求助', 'primary', '', true, true) + '</div>';
+  if (roleRank[AppState.currentRole] >= 1) {
+    html += '<div class="bottom-bar">' + UI_Button('发布求助', 'primary', '', true, true) + '</div>';
+  }
   html += '</div>';
   return html;
 };
@@ -404,10 +449,51 @@ Views.PublishHelp = function() {
 
 // --- MEMBER CARD ---
 Views.MemberCardList = function() {
-  var html = '<div class="page-container">' + UI_NavBar('会员名片', true) + UI_Search('', '搜索会员...');
-  html += '<div class="card-list">';
+  var html = '<div class="page-container">' + UI_NavBar('会员名片', true);
+
+  // 搜索和筛选栏
+  html += '<div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--border)">';
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+  html += '<div style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;white-space:nowrap;display:flex;align-items:center;gap:4px">';
+  html += '<span>筛选</span>';
+  html += iconSVG('arrowDown', 12, '#999');
+  html += '</div>';
+  html += '<div style="flex:1;position:relative">';
+  html += '<input type="search" placeholder="搜索会员姓名/公司" style="width:100%;padding:6px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;outline:none;box-sizing:border-box">';
+  html += '</div>';
+  html += '</div></div>';
+
+  // 会员卡片列表
+  html += '<div style="padding:12px;background:#f5f5f5">';
   memberList.forEach(function(m) {
-    html += '<div class="comp-cell" data-action="nav" data-payload="/member-card/' + m.id + '"><img src="' + m.avatar + '" style="width:44px;height:44px;border-radius:50%;margin-right:10px"><div class="cell-body"><div class="cell-title">' + escapeHtml(m.name) + '</div><div class="cell-label">' + m.company + ' · ' + m.title + '</div></div><span class="cell-arrow">' + iconSVG('arrowRight', 14, '#c8c9cc') + '</span></div>';
+    html += '<div class="member-card" data-action="nav" data-payload="/member-card/' + m.id + '" style="background:#fff;border-radius:12px;padding:16px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06);position:relative;overflow:hidden">';
+
+    // 会员标签（右上角）
+    html += '<div style="position:absolute;top:0;right:0;background:linear-gradient(135deg,#dabb6e,#e8c987);color:#fff;font-size:11px;padding:3px 12px;border-bottom-left-radius:8px">商务会员</div>';
+
+    // 头部：头像+姓名+职位
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:12px">';
+    html += '<img src="' + m.avatar + '" style="width:60px;height:60px;border-radius:50%;flex-shrink:0;border:2px solid #dabb6e">';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-size:17px;font-weight:600;margin-bottom:4px;color:#333">' + escapeHtml(m.name) + '</div>';
+    html += '<div style="font-size:13px;color:#666;margin-bottom:2px">' + escapeHtml(m.title) + '</div>';
+    html += '<div style="font-size:12px;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(m.company) + '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    // 详细信息
+    html += '<div style="padding-top:10px;border-top:1px solid #f0f0f0">';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:#666">';
+    html += '<div style="display:flex;align-items:center;gap:4px">' + iconSVG('award', 12, '#999') + '<span>' + escapeHtml(m.school) + '</span></div>';
+    html += '<div style="display:flex;align-items:center;gap:4px">' + iconSVG('users', 12, '#999') + '<span>' + escapeHtml(m.year) + '</span></div>';
+    html += '</div>';
+    html += '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:13px;color:#666;margin-top:6px;align-items:center">';
+    html += '<span style="display:inline-block;padding:1px 8px;background:#e3f2fd;color:#1976d2;border-radius:4px;font-size:11px">' + escapeHtml(m.industry) + '</span>';
+    html += '<span style="color:#999">' + escapeHtml(m.city) + '</span>';
+    html += '<span style="color:#999;margin-left:auto;font-size:11px">入会：' + escapeHtml(m.memberSince) + '</span>';
+    html += '</div></div>';
+
+    html += '</div>';
   });
   html += '</div></div>';
   return html;
@@ -440,10 +526,43 @@ Views.MemberCardDetail = function() {
 
 // --- MEMBER COMPANY ---
 Views.MemberCompanyList = function() {
-  var html = '<div class="page-container">' + UI_NavBar('会员企业', true) + UI_Search('', '搜索企业...');
-  html += '<div class="card-list">';
+  var html = '<div class="page-container">' + UI_NavBar('会员企业', true);
+
+  // 搜索和筛选栏
+  html += '<div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--border)">';
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+
+  // 行业分类下拉（简化版，显示为按钮）
+  html += '<div style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;white-space:nowrap;display:flex;align-items:center;gap:4px">';
+  html += '<span>行业分类</span>';
+  html += iconSVG('arrowDown', 12, '#999');
+  html += '</div>';
+
+  // 搜索框
+  html += '<div style="flex:1;position:relative">';
+  html += '<input type="search" placeholder="搜索企业或简讯" style="width:100%;padding:6px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;outline:none;box-sizing:border-box">';
+  html += '</div>';
+  html += '</div></div>';
+
+  // 企业列表
+  html += '<div style="padding:8px 0;background:#f5f5f5">';
   companyList.forEach(function(c) {
-    html += '<div class="comp-cell" data-action="nav" data-payload="/member-company/' + c.id + '"><img src="' + c.logo + '" style="width:40px;height:40px;border-radius:8px;margin-right:10px"><div class="cell-body"><div class="cell-title">' + escapeHtml(c.name) + '</div><div class="cell-label">' + c.industry + ' · ' + c.founder + '</div></div><span class="cell-arrow">' + iconSVG('arrowRight', 14, '#c8c9cc') + '</span></div>';
+    html += '<div class="company-card" data-action="nav" data-payload="/member-company/' + c.id + '" style="background:#fff;margin-bottom:8px;padding:12px 16px;display:flex;align-items:center;gap:12px">';
+
+    // 企业logo（圆形）
+    html += '<img src="' + c.logo + '" style="width:48px;height:48px;border-radius:50%;flex-shrink:0;object-fit:cover">';
+
+    // 企业信息
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-size:16px;font-weight:600;margin-bottom:4px;color:#333">' + escapeHtml(c.name) + '</div>';
+    html += '<div style="font-size:13px;color:#666;margin-bottom:2px">行业：' + escapeHtml(c.industry) + '</div>';
+    html += '<div style="font-size:13px;color:#999">地址：' + escapeHtml(c.address) + '</div>';
+    html += '</div>';
+
+    // 右箭头
+    html += '<div style="flex-shrink:0">' + iconSVG('arrow-right', 16, '#ccc') + '</div>';
+
+    html += '</div>';
   });
   html += '</div></div>';
   return html;
@@ -456,11 +575,27 @@ Views.MemberCompanyDetail = function() {
   html += '<div style="text-align:center;padding:20px"><img src="' + c.logo + '" style="width:64px;height:64px;border-radius:12px;margin:0 auto"><h3 style="margin:8px 0 4px">' + escapeHtml(c.name) + '</h3><div style="font-size:12px;color:var(--text-lighter)">' + escapeHtml(c.industry) + '</div></div>';
   html += UI_CellGroup([{ title: '创始人', value: c.founder }, { title: '地址', value: c.address }, { title: '行业', value: c.industry }], true);
   html += '<div class="content-detail"><h4>企业简介</h4><div class="body">' + escapeHtml(c.intro) + '</div></div>';
+
   if (c.products && c.products.length) {
-    html += '<div class="section-title" style="padding:8px 16px">旗下产品</div>';
+    html += '<div class="section-title" style="padding:8px 16px;background:#fff">旗下产品</div>';
+    html += '<div style="padding:8px 0;background:#f5f5f5">';
     c.products.forEach(function(p) {
-      html += '<div class="comp-cell" data-action="nav" data-payload="/member-product/' + p.id + '"><img src="' + p.cover + '" style="width:40px;height:40px;border-radius:6px;margin-right:10px;object-fit:cover"><div class="cell-body"><div class="cell-title">' + escapeHtml(p.name) + '</div><div class="cell-label">' + escapeHtml(p.intro || '') + '</div></div><span class="cell-arrow">' + iconSVG('arrowRight', 14, '#c8c9cc') + '</span></div>';
+      html += '<div class="product-card" data-action="nav" data-payload="/member-product/' + p.id + '" style="background:#fff;margin-bottom:8px;padding:12px 16px;display:flex;gap:12px">';
+
+      // 产品图片（方形）
+      html += '<img src="' + p.cover + '" style="width:80px;height:80px;border-radius:6px;flex-shrink:0;object-fit:cover">';
+
+      // 产品信息
+      html += '<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center">';
+      html += '<div style="font-size:15px;font-weight:600;margin-bottom:4px;color:#333">产品名称：' + escapeHtml(p.name) + '</div>';
+      html += '<div style="font-size:13px;color:#666;margin-bottom:2px">所属行业：' + escapeHtml(p.industry) + '</div>';
+      html += '<div style="font-size:13px;color:#666;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">应用领域：' + escapeHtml((p.intro || '').substring(0, 20)) + ((p.intro || '').length > 20 ? '...' : '') + '</div>';
+      html += '<div style="font-size:13px;color:#666">生产企业：' + escapeHtml(c.name) + '</div>';
+      html += '</div>';
+
+      html += '</div>';
     });
+    html += '</div>';
   }
   html += '</div>';
   return html;
@@ -468,10 +603,45 @@ Views.MemberCompanyDetail = function() {
 
 // --- MEMBER PRODUCT ---
 Views.MemberProductList = function() {
-  var html = '<div class="page-container">' + UI_NavBar('会员产品', true) + UI_Search('', '搜索产品...');
-  html += '<div class="card-list">';
+  var html = '<div class="page-container">' + UI_NavBar('会员产品', true);
+
+  // 搜索和筛选栏
+  html += '<div style="padding:12px 16px;background:#fff;border-bottom:1px solid var(--border)">';
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+
+  // 行业分类下拉
+  html += '<div style="padding:6px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;white-space:nowrap;display:flex;align-items:center;gap:4px">';
+  html += '<span>行业分类</span>';
+  html += iconSVG('arrowDown', 12, '#999');
+  html += '</div>';
+
+  // 搜索框
+  html += '<div style="flex:1;position:relative">';
+  html += '<input type="search" placeholder="搜索产品类键词" style="width:100%;padding:6px 12px;border:1px solid var(--border);border-radius:4px;font-size:14px;outline:none;box-sizing:border-box">';
+  html += '</div>';
+  html += '</div>';
+
+  // 产品数量统计
+  html += '<div style="padding:8px 16px;font-size:13px;color:#666;background:#fff">当前产品数量：' + productList.length + '个</div>';
+  html += '</div>';
+
+  // 产品列表
+  html += '<div style="padding:8px 0;background:#f5f5f5">';
   productList.forEach(function(p) {
-    html += '<div class="comp-cell" data-action="nav" data-payload="/member-product/' + p.id + '"><img src="' + p.cover + '" style="width:44px;height:44px;border-radius:6px;margin-right:10px;object-fit:cover"><div class="cell-body"><div class="cell-title">' + escapeHtml(p.name) + '</div><div class="cell-label">' + p.company + ' · ' + p.industry + '</div></div><span class="cell-arrow">' + iconSVG('arrowRight', 14, '#c8c9cc') + '</span></div>';
+    html += '<div class="product-card" data-action="nav" data-payload="/member-product/' + p.id + '" style="background:#fff;margin-bottom:8px;padding:12px 16px;display:flex;gap:12px">';
+
+    // 产品图片（方形）
+    html += '<img src="' + p.cover + '" style="width:80px;height:80px;border-radius:6px;flex-shrink:0;object-fit:cover">';
+
+    // 产品信息
+    html += '<div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:center">';
+    html += '<div style="font-size:15px;font-weight:600;margin-bottom:4px;color:#333">产品名称：' + escapeHtml(p.name) + '</div>';
+    html += '<div style="font-size:13px;color:#666;margin-bottom:2px">所属行业：' + escapeHtml(p.industry) + '</div>';
+    html += '<div style="font-size:13px;color:#666;margin-bottom:2px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">应用领域：' + escapeHtml(p.intro.substring(0, 20)) + (p.intro.length > 20 ? '...' : '') + '</div>';
+    html += '<div style="font-size:13px;color:#666">生产企业：' + escapeHtml(p.company) + '</div>';
+    html += '</div>';
+
+    html += '</div>';
   });
   html += '</div></div>';
   return html;
@@ -497,40 +667,206 @@ Views.MemberProductDetail = function() {
 // --- MEMBER SERVICE ---
 Views.MemberServiceIndex = function() {
   var cats = [
-    { name: '市场推广', desc: '品牌宣传 · 营销策划', icon: 'fire', color: '#e8f4fd', iconColor: '#6fa4cf' },
-    { name: '企业赋能', desc: '培训 · 咨询 · 融资', icon: 'activity', color: '#e8f8ee', iconColor: '#07c160' },
-    { name: '商务活动', desc: '路演 · 对接 · 展会', icon: 'calendar', color: '#fff0f0', iconColor: '#ee0a24' },
-    { name: '专属服务', desc: '法务 · 财税 · HR', icon: 'service', color: '#fff7ed', iconColor: '#ff976a' }
+    { key: 'market', name: '市场推广', desc: '供需匹配 · 渠道拓展 · 项目合作', icon: 'fire', gradient: 'linear-gradient(135deg, #6fa4cf, #4a90d9)', tagBg: '#e8f4fd', tagColor: '#4a90d9' },
+    { key: 'empower', name: '企业赋能', desc: '投融资 · 流量运营 · 人才招聘等10项', icon: 'activity', gradient: 'linear-gradient(135deg, #07c160, #05a04a)', tagBg: '#e8f8ee', tagColor: '#05a04a' },
+    { key: 'biz-activity', name: '商务活动', desc: '主题沙龙 · 项目路演 · 年度峰会等12项', icon: 'calendar', gradient: 'linear-gradient(135deg, #ee0a24, #d00820)', tagBg: '#fff0f0', tagColor: '#d00820' },
+    { key: 'exclusive', name: '专属服务', desc: '亲子教育 · 医疗保健 · 居家置业等', icon: 'service', gradient: 'linear-gradient(135deg, #ff976a, #f07a4a)', tagBg: '#fff7ed', tagColor: '#f07a4a' }
   ];
-  var html = '<div class="page-container">' + UI_NavBar('会员服务', true);
-  html += '<div class="svc-categories">';
+
+  var html = '<div class="page-container" style="background:#f5f6fa">' + UI_NavBar('会员服务', true);
+
+  // 顶部说明条
+  html += '<div style="padding:12px 16px;background:linear-gradient(135deg,#f0f4ff,#fff);display:flex;align-items:center;gap:8px;border-bottom:1px solid #eef0f5">';
+  html += '<div style="width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#6fa4cf,#9bc1de);display:flex;align-items:center;justify-content:center;flex-shrink:0">' + iconSVG('service', 16, '#fff') + '</div>';
+  html += '<div><div style="font-size:13px;font-weight:600;color:#333">欢迎使用会员服务</div><div style="font-size:11px;color:#999">北理工校友专属的商务服务对接平台</div></div>';
+  html += '</div>';
+
+  // 大类卡片 - 横向两列布局
+  html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:12px 16px">';
   cats.forEach(function(c) {
-    html += '<div class="svc-cat-card" data-action="nav" data-payload="/member-service/' + encodeURIComponent(c.name) + '"><div class="cat-icon" style="background:' + c.color + '">' + iconSVG(c.icon, 26, c.iconColor) + '</div><div class="cat-name">' + c.name + '</div><div class="cat-desc">' + c.desc + '</div></div>';
+    var subCount = (serviceCategoryMap[c.name] || []).length;
+    var projectCount = serviceProjects.filter(function(p) {
+      return (serviceCategoryMap[c.name] || []).indexOf(p.category) >= 0;
+    }).length;
+    html += '<div data-action="nav" data-payload="/member-service/' + c.key + '" style="background:#fff;border-radius:14px;padding:14px 12px;box-shadow:0 2px 12px rgba(0,0,0,0.06);position:relative;overflow:hidden;cursor:pointer">';
+    // 顶部彩色色条
+    html += '<div style="position:absolute;top:0;left:0;right:0;height:3px;background:' + c.gradient + '"></div>';
+    // 图标
+    html += '<div style="width:42px;height:42px;border-radius:12px;background:' + c.gradient + ';display:flex;align-items:center;justify-content:center;margin-bottom:10px">' + iconSVG(c.icon, 22, '#fff') + '</div>';
+    // 名称
+    html += '<div style="font-size:15px;font-weight:700;color:#222;margin-bottom:4px">' + c.name + '</div>';
+    // 描述
+    html += '<div style="font-size:11px;color:#888;line-height:1.5">' + c.desc + '</div>';
+    // 统计
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-top:10px;padding-top:8px;border-top:1px solid #f0f0f0">';
+    html += '<span style="font-size:10px;color:#aaa">' + subCount + ' 个子类</span>';
+    html += '<span style="font-size:10px;color:#aaa">' + projectCount + ' 项服务</span>';
+    html += '</div>';
+    html += '</div>';
   });
+  html += '</div>';
+
+  // 分隔标题
+  html += '<div style="padding:8px 16px 12px">';
+  html += '<div style="display:flex;align-items:center;gap:6px">';
+  html += '<div style="width:4px;height:16px;background:linear-gradient(180deg,#6fa4cf,#9bc1de);border-radius:2px"></div>';
+  html += '<span style="font-size:15px;font-weight:600;color:#333">全部服务分类</span>';
   html += '</div></div>';
+
+  // 子分类预览 - 每个大类面板
+  html += '<div style="padding:0 16px 20px">';
+  cats.forEach(function(c) {
+    var subs = serviceCategoryMap[c.name] || [];
+    if (subs.length === 0) return;
+    html += '<div style="background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,0.04)">';
+    // 头部
+    html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px">';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<div style="width:8px;height:8px;border-radius:50%;background:' + c.tagColor + '"></div>';
+    html += '<span style="font-size:15px;font-weight:700;color:#222">' + c.name + '</span>';
+    html += '<span style="font-size:11px;color:#aaa;margin-left:4px">' + subs.length + '项</span>';
+    html += '</div>';
+    html += '<span data-action="nav" data-payload="/member-service/' + c.key + '" style="display:flex;align-items:center;gap:4px;font-size:12px;color:' + c.tagColor + ';cursor:pointer;padding:4px 8px;border-radius:12px;background:' + c.tagBg + '">全部' + iconSVG('arrow-right', 10, c.tagColor) + '</span>';
+    html += '</div>';
+
+    // 子分类标签
+    html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+    subs.forEach(function(sub) {
+      var count = serviceProjects.filter(function(p) { return p.category === sub; }).length;
+      html += '<span data-action="nav" data-payload="/member-service/' + c.key + '" style="display:inline-block;padding:6px 12px;background:' + c.tagBg + ';color:' + c.tagColor + ';border-radius:8px;font-size:12px;font-weight:500;cursor:pointer;transition:all 0.2s">' + escapeHtml(sub) + (count > 0 ? '<span style="font-size:10px;opacity:0.7;margin-left:4px">' + count + '</span>' : '') + '</span>';
+    });
+    html += '</div>';
+    html += '</div>';
+  });
+  html += '</div>';
+
+  html += '</div>';
   return html;
 };
 
 Views.MemberServiceDetail = function() {
-  var cat = decodeURIComponent(Router.params.category || '');
-  var svcs = [
-    { id: 1, name: '品牌战略咨询', provider: '智控科技', desc: '为校友企业提供品牌战略规划和市场定位服务' },
-    { id: 2, name: '数字化营销方案', provider: '星辰科技', desc: '定制数字化营销解决方案，覆盖微信、抖音等平台' },
-    { id: 3, name: '企业融资顾问', provider: '金融投资俱乐部', desc: '为企业提供融资方案设计和投资人对接服务' }
-  ];
-  var html = '<div class="page-container">' + UI_NavBar(cat || '服务详情', true);
-  html += '<div class="card-list">';
-  svcs.forEach(function(s) {
-    html += '<div class="comp-cell" data-action="nav" data-payload="/service-provider/' + s.id + '"><div class="cell-body"><div class="cell-title">' + escapeHtml(s.name) + '</div><div class="cell-label">' + s.provider + ' · ' + escapeHtml(s.desc) + '</div></div>' + UI_Button('联系Ta', 'primary', 'small', true) + '</div>';
+  var catKey = Router.params.category || '';
+
+  // 分类key到名称的映射
+  var categoryNames = {
+    'market': '市场推广',
+    'empower': '企业赋能',
+    'biz-activity': '商务活动',
+    'exclusive': '专属服务'
+  };
+
+  var catName = categoryNames[catKey] || '服务详情';
+
+  // 获取该大类下的所有子分类
+  var subCategories = serviceCategoryMap[catName] || [];
+
+  // 当前选中的子分类（从uiState获取，默认为"全部"）
+  if (!uiState.serviceSubCategory) uiState.serviceSubCategory = {};
+  var currentSub = uiState.serviceSubCategory[catKey] || '';
+
+  // 根据大类和子分类筛选服务项目
+  var projects = serviceProjects.filter(function(p) {
+    var inCategory = subCategories.indexOf(p.category) >= 0;
+    if (!inCategory) return false;
+    if (currentSub && p.category !== currentSub) return false;
+    return true;
+  }).map(function(p) {
+    var provider = serviceProviders.find(function(sp) { return sp.id === p.providerId; });
+    return {
+      id: p.id,
+      name: p.name,
+      desc: p.desc,
+      price: p.price,
+      unit: p.unit,
+      category: p.category,
+      viewCount: p.viewCount,
+      orderCount: p.orderCount,
+      providerName: provider ? provider.name : '未知机构',
+      providerAvatar: provider ? provider.avatar : img('default', 100, 100),
+      providerId: p.providerId
+    };
   });
-  html += '</div></div>';
+
+  var html = '<div class="page-container" style="background:#f5f6fa">' + UI_NavBar(catName, true);
+
+  // 子分类标签筛选（可点击）
+  if (subCategories.length > 0) {
+    html += '<div style="padding:10px 16px;background:#fff;border-bottom:1px solid #eef0f5;display:flex;align-items:center;gap:8px;overflow-x:auto;white-space:nowrap;-webkit-overflow-scrolling:touch">';
+
+    // 全部按钮
+    var allActive = !currentSub;
+    html += '<span data-action="filter-service-sub" data-cat="' + catKey + '" data-sub="" style="flex-shrink:0;display:inline-flex;align-items:center;padding:6px 14px;background:' + (allActive ? 'linear-gradient(135deg,#6fa4cf,#4a90d9)' : '#f0f2f5') + ';color:' + (allActive ? '#fff' : '#666') + ';border-radius:20px;font-size:13px;cursor:pointer;font-weight:' + (allActive ? '600' : '400') + ';transition:all 0.2s">全部</span>';
+
+    // 子分类按钮
+    subCategories.forEach(function(sub) {
+      var isActive = currentSub === sub;
+      var count = serviceProjects.filter(function(p) { return p.category === sub; }).length;
+      html += '<span data-action="filter-service-sub" data-cat="' + catKey + '" data-sub="' + escapeHtml(sub) + '" style="flex-shrink:0;display:inline-flex;align-items:center;gap:4px;padding:6px 14px;background:' + (isActive ? 'linear-gradient(135deg,#6fa4cf,#4a90d9)' : '#f0f2f5') + ';color:' + (isActive ? '#fff' : '#666') + ';border-radius:20px;font-size:12px;cursor:pointer;font-weight:' + (isActive ? '600' : '400') + ';transition:all 0.2s">' + escapeHtml(sub) + (count > 0 ? '<span style="font-size:10px;opacity:0.8">' + count + '</span>' : '') + '</span>';
+    });
+    html += '</div>';
+
+    // 当前筛选状态
+    if (currentSub) {
+      html += '<div style="padding:8px 16px;background:#f0f4ff;display:flex;align-items:center;gap:6px;font-size:12px;color:#4a90d9">';
+      html += iconSVG('check', 14, '#4a90d9');
+      html += '当前筛选：<b>' + escapeHtml(currentSub) + '</b>';
+      html += '<span data-action="filter-service-sub" data-cat="' + catKey + '" data-sub="" style="margin-left:auto;color:#999;cursor:pointer;font-size:11px">清除筛选</span>';
+      html += '</div>';
+    }
+  }
+
+  if (projects.length === 0) {
+    html += '<div style="padding:60px 20px;text-align:center">';
+    html += '<div style="margin-bottom:12px">' + iconSVG('package', 48, '#ddd') + '</div>';
+    html += '<div style="font-size:14px;color:#999;margin-bottom:4px">暂无服务项目</div>';
+    html += '<div style="font-size:12px;color:#bbb">该分类下暂未上架服务，请稍后再来</div>';
+    html += '</div>';
+  } else {
+    html += '<div style="padding:12px 16px">';
+    projects.forEach(function(proj) {
+      html += '<div class="service-card" data-action="nav" data-payload="/service-project/' + proj.id + '" style="background:#fff;border-radius:14px;padding:16px;margin-bottom:12px;box-shadow:0 2px 10px rgba(0,0,0,0.04);position:relative">';
+
+      // 左上角分类标签
+      html += '<span style="position:absolute;top:14px;right:14px;display:inline-block;padding:3px 10px;background:#e8f5e9;color:#4caf50;border-radius:10px;font-size:11px;font-weight:500">' + escapeHtml(proj.category) + '</span>';
+
+      // 服务机构信息
+      html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">';
+      html += '<img src="' + proj.providerAvatar + '" style="width:38px;height:38px;border-radius:10px;flex-shrink:0;box-shadow:0 2px 6px rgba(0,0,0,0.08)">';
+      html += '<div>';
+      html += '<div style="font-size:13px;font-weight:600;color:#333;margin-bottom:2px">' + escapeHtml(proj.providerName) + '</div>';
+      html += '<div style="font-size:11px;color:#aaa">' + (proj.orderCount || 0) + ' 次合作</div>';
+      html += '</div></div>';
+
+      // 服务标题
+      html += '<div style="font-size:16px;font-weight:700;color:#222;margin-bottom:8px;line-height:1.4;padding-right:100px">' + escapeHtml(proj.name) + '</div>';
+
+      // 描述
+      html += '<div style="font-size:13px;color:#666;line-height:1.6;margin-bottom:12px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' + escapeHtml(proj.desc) + '</div>';
+
+      // 价格和统计
+      html += '<div style="display:flex;align-items:flex-end;justify-content:space-between;padding-top:12px;border-top:1px solid #f5f5f5">';
+      html += '<div style="display:flex;align-items:baseline;gap:3px">';
+      html += '<span style="font-size:22px;font-weight:800;color:#f56c6c;letter-spacing:-0.5px">¥' + proj.price.toLocaleString() + '</span>';
+      html += '<span style="font-size:12px;color:#aaa">/ ' + proj.unit + '</span>';
+      html += '</div>';
+      html += '<div style="display:flex;align-items:center;gap:12px;font-size:11px;color:#bbb">';
+      html += '<span style="display:flex;align-items:center;gap:3px">' + iconSVG('eye', 11, '#ccc') + proj.viewCount + '</span>';
+      html += '<span style="display:flex;align-items:center;gap:3px">' + iconSVG('bag', 11, '#ccc') + proj.orderCount + '</span>';
+      html += '</div></div>';
+
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  html += '</div>';
   return html;
 };
 
 Views.ServiceProvider = function() {
   var id = parseInt(Router.params.id);
   var html = '<div class="page-container">' + UI_NavBar('服务提供方', true);
-  html += '<div style="text-align:center;padding:20px"><img src="https://picsum.photos/seed/svc' + id + '/100/100" style="width:64px;height:64px;border-radius:12px;margin:0 auto"><h3 style="margin:8px 0 4px">服务提供方 #' + id + '</h3></div>';
+  html += '<div style="text-align:center;padding:20px"><img src="' + img('svc'+id, 100, 100) + '" style="width:64px;height:64px;border-radius:12px;margin:0 auto"><h3 style="margin:8px 0 4px">服务提供方 #' + id + '</h3></div>';
   html += '<div class="content-detail"><div class="body">专业的校友服务机构，为校友企业提供优质的服务解决方案。</div></div>';
   html += '<div class="bottom-bar">' + UI_Button('联系Ta', 'primary', '', true, true) + '</div>';
   html += '</div>';
@@ -687,7 +1023,7 @@ Views.Profile = function() {
   var role = AppState.currentRole;
   var isAlumni = roleRank[role] >= 1;
   var isMember = roleRank[role] >= 2;
-  var myAvatar = 'https://picsum.photos/seed/myavatar/100/100';
+  var myAvatar = img('myavatar', 100, 100);
   // Stats based on role
   var stats = isAlumni
     ? '<div class="stat"><div class="num">3</div><div class="label">好友</div></div><div class="stat"><div class="num">4</div><div class="label">动态</div></div><div class="stat"><div class="num">1250</div><div class="label">积分</div></div>'
@@ -695,7 +1031,26 @@ Views.Profile = function() {
 
   var html = '<div class="page-container">';
   html += '<div class="profile-header"><div class="profile-card">';
-  html += '<div class="avatar-row"><img src="' + myAvatar + '" data-action="nav" data-payload="/profile/edit" style="cursor:pointer"><div class="info"><div class="name">演示用户 <span data-action="show-role-popup">' + UI_Tag(role, 'primary') + '</span></div><div style="font-size:11px;color:var(--text-lighter);margin-top:2px">自动化学院 · 2005级 · 北京</div></div><span data-action="toast" data-payload="设置功能即将上线">' + iconSVG('settings', 20, '#999') + '</span></div>';
+
+  // 会员到期提醒（仅商务会员/服务机构）
+  var memberExpiry = '';
+  if (isMember) {
+    var expiryDate = '2026-12-31';
+    var today = new Date();
+    var expDate = new Date(expiryDate);
+    var daysLeft = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+    var expColor, expText;
+    if (daysLeft < 0) {
+      expColor = '#ee0a24'; expText = '已过期';
+    } else if (daysLeft <= 30) {
+      expColor = '#ff976a'; expText = '剩余' + daysLeft + '天 · ' + expiryDate;
+    } else {
+      expColor = '#07c160'; expText = '有效期至 ' + expiryDate;
+    }
+    memberExpiry = '<span style="display:inline-flex;align-items:center;gap:3px;margin-left:6px;padding:2px 8px;background:' + expColor + '14;color:' + expColor + ';border-radius:10px;font-size:11px;font-weight:500" data-action="toast" data-payload="点击续费功能即将上线">' + iconSVG('clock', 11, expColor) + expText + '</span>';
+  }
+
+  html += '<div class="avatar-row"><img src="' + myAvatar + '" data-action="nav" data-payload="/profile/edit" style="cursor:pointer"><div class="info"><div class="name">演示用户 <span data-action="show-role-popup">' + UI_Tag(role, 'primary') + '</span>' + memberExpiry + '</div><div style="font-size:11px;color:var(--text-lighter);margin-top:2px">自动化学院 · 2005级 · 北京</div></div><span data-action="nav" data-payload="/profile/settings">' + iconSVG('settings', 20, '#999') + '</span></div>';
   html += '<div class="stats">' + stats + '</div></div></div>';
   // Exchange requests (for alumni)
   if (isAlumni && AppState.incomingRequests.length > 0) {
@@ -708,14 +1063,14 @@ Views.Profile = function() {
     });
     html += '</div>';
   }
-  // Member promo
-  if (!isMember) {
+  // Member promo (only for 认证校友, not 普通用户)
+  if (isAlumni && !isMember) {
     html += '<div class="promo-card" data-action="nav" data-payload="/profile/member-edit"><div class="promo-icon">⭐</div><div class="promo-text"><div class="pt">升级为商务会员</div><div class="ps">解锁会员名片、企业展示、产品推广等更多权益</div></div>' + iconSVG('arrowRight', 16, '#dabb6e') + '</div>';
   }
   // Service grid
   html += '<div class="service-grid">';
-  html += '<div class="svc-item" data-action="nav" data-payload="/profile/member-edit"><div class="svc-icon">' + iconSVG('award', 20, '#6fa4cf') + '</div><div class="svc-label">' + (isAlumni ? '会员信息' : '校友认证') + '</div></div>';
-  html += '<div class="svc-item" data-action="nav" data-payload="/profile/member-edit"><div class="svc-icon">' + iconSVG('edit', 20, '#07c160') + '</div><div class="svc-label">资料编辑</div></div>';
+  html += '<div class="svc-item" data-action="nav" data-payload="' + (isAlumni ? '/profile/member-edit' : '/profile/edit') + '"><div class="svc-icon">' + iconSVG('award', 20, '#6fa4cf') + '</div><div class="svc-label">' + (isAlumni ? (isMember ? '商务信息' : '升级会员') : '校友认证') + '</div></div>';
+  html += '<div class="svc-item" data-action="nav" data-payload="/profile/edit"><div class="svc-icon">' + iconSVG('edit', 20, '#07c160') + '</div><div class="svc-label">资料编辑</div></div>';
   html += '<div class="svc-item" data-action="nav" data-payload="/profile/group-buy"><div class="svc-icon">' + iconSVG('bag', 20, '#ee0a24') + '</div><div class="svc-label">团购订单</div></div>';
   html += '<div class="svc-item" data-action="toast" data-payload="客服功能即将上线"><div class="svc-icon">' + iconSVG('phone', 20, '#ff976a') + '</div><div class="svc-label">客服</div></div>';
   html += '</div>';
@@ -740,26 +1095,367 @@ Views.Profile = function() {
   if (isMember) {
     html += '<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 16px;margin:0 16px 10px;background:linear-gradient(135deg,#fff8e1,#fff3cd);border-radius:8px"><div style="display:flex;align-items:center;gap:6px">' + iconSVG('coin', 18, '#dabb6e') + '<span style="font-weight:600">当前积分 1250</span></div><span style="font-size:12px;color:var(--accent);cursor:pointer" data-action="nav" data-payload="/profile/points">查看明细 &gt;</span></div>';
   }
-  // Logout
-  html += '<div style="padding:12px 16px 20px;display:flex;gap:10px"><span style="flex:1">' + UI_Button('退出登录', 'outline', '', true, true) + '</span><span style="flex:1">' + UI_Button('重置演示数据', 'outline', '', true) + '</span></div>';
   html += '</div>';
   return html;
 };
 
+Views.ProfileSettings = function() {
+  var appVersion = 'v1.0.0';
+  var buildDate = '2026-06-25';
+  var html = '<div class="page-container">' + UI_NavBar('设置', true);
+
+  html += '<div style="padding:12px 0">';
+
+  // 系统信息
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text-light);padding:12px 20px 6px">系统信息</div>';
+  html += '<div class="comp-cell-group inset">';
+  html += '<div class="comp-cell"><div class="cell-body"><div class="cell-title">当前版本</div></div><span class="cell-value" style="color:var(--text-light)">' + appVersion + '</span></div>';
+  html += '<div class="comp-cell"><div class="cell-body"><div class="cell-title">构建日期</div></div><span class="cell-value" style="color:var(--text-light)">' + buildDate + '</span></div>';
+  html += '<div class="comp-cell" data-action="toast" data-payload="已是最新版本"><div class="cell-body"><div class="cell-title">检查更新</div></div><span class="cell-arrow">' + iconSVG('arrowRight', 14, '#c8c9cc') + '</span></div>';
+  html += '</div>';
+
+  // 账户管理
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text-light);padding:12px 20px 6px">账户管理</div>';
+  html += '<div class="comp-cell-group inset">';
+  html += '<div class="comp-cell" data-action="logout"><div class="cell-body"><div class="cell-title" style="color:#ee0a24">退出登录</div></div><span class="cell-arrow">' + iconSVG('arrowRight', 14, '#c8c9cc') + '</span></div>';
+  html += '</div>';
+
+  // 开发者选项
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text-light);padding:12px 20px 6px">开发者选项</div>';
+  html += '<div class="comp-cell-group inset">';
+  html += '<div class="comp-cell" data-action="reset-data"><div class="cell-body"><div class="cell-title" style="color:#ff976a">重置演示数据</div></div><span class="cell-arrow">' + iconSVG('arrowRight', 14, '#c8c9cc') + '</span></div>';
+  html += '</div>';
+
+  html += '</div></div>';
+  return html;
+};
+
 Views.ProfileEdit = function() {
-  return '<div class="page-container">' + UI_NavBar('编辑资料', true)
-    + UI_Field('姓名', 'text', '请输入姓名', '演示用户') + UI_Field('性别', 'text', '请输入性别', '男')
-    + UI_Field('出生日期', 'text', '请输入出生日期', '1990-01-01') + UI_Field('手机号', 'tel', '请输入手机号', '138****8888')
-    + UI_Field('学校', 'text', '', '北京理工大学') + UI_Field('专业', 'text', '', '自动化') + UI_Field('年级', 'text', '', '2005级')
-    + '<div style="padding:12px 16px">' + UI_Button('保存', 'primary', '', true, true) + '</div></div>';
+  var role = AppState.currentRole;
+  var isAlumni = roleRank[role] >= 1;
+  var pageTitle = isAlumni ? '编辑校友信息' : '申请校友认证';
+  var btnText = isAlumni ? '保存' : '提交审核';
+
+  var d = isAlumni ? {
+    avatar: img('myavatar', 100, 100),
+    name: '赵明辉', gender: '男', birth: '1987-05', phone: '138****8888', email: 'zhaomh@example.com',
+    school: '北京理工大学', dept: '自动化学院', major: '控制科学与工程', year: '2005级', degree: '硕士',
+    hometown: '江苏南京', city: '北京', tags: '创业,人工智能,智能制造', hobbies: '篮球,摄影,阅读', intro: ''
+  } : {
+    avatar: '', name: '', gender: '', birth: '', phone: '', email: '',
+    school: '', dept: '', major: '', year: '', degree: '',
+    hometown: '', city: '', tags: '', hobbies: '', intro: ''
+  };
+
+  function genderField(val) {
+    var opts = ['男', '女'];
+    var sel = opts.map(function(o) { return '<option value="' + o + '"' + (o === val ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+    return '<div class="comp-field"><span class="field-label required">性别</span><select class="pe-select">'
+      + '<option value="" disabled' + (val ? '' : ' selected') + '>请选择性别</option>' + sel + '</select></div>';
+  }
+  function degreeField(val) {
+    var opts = ['本科', '硕士', '博士', '其它'];
+    var sel = opts.map(function(o) { return '<option value="' + o + '"' + (o === val ? ' selected' : '') + '>' + o + '</option>'; }).join('');
+    return '<div class="comp-field"><span class="field-label required">学历层次</span><select class="pe-select">'
+      + '<option value="" disabled' + (val ? '' : ' selected') + '>请选择学历层次</option>' + sel + '</select></div>';
+  }
+  function avatarField(val) {
+    var preview = val
+      ? '<img src="' + val + '" id="pe-avatar-preview" style="width:60px;height:60px;border-radius:50%;object-fit:cover;border:1px solid #ebedf0">'
+      : '<div id="pe-avatar-preview" style="width:60px;height:60px;border-radius:50%;background:#f5f5f5;display:flex;align-items:center;justify-content:center;border:1px dashed #c8c9cc;color:#c8c9cc;font-size:24px">+</div>';
+    return '<div class="comp-field" style="align-items:center"><span class="field-label required">上传头像</span>'
+      + '<label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-left:auto">'
+      + preview
+      + '<input type="file" accept="image/*" id="pe-avatar-input" style="display:none">'
+      + '</label></div>';
+  }
+
+  var html = '<div class="page-container">' + UI_NavBar(pageTitle, true);
+  html += '<div style="padding:8px 0">';
+
+  // 个人基础信息
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text-light);padding:12px 20px 6px">个人基础信息 <span style="color:#ee0a24;font-size:11px;font-weight:400">*必填</span></div>';
+  html += '<div class="comp-cell-group inset">';
+  html += avatarField(d.avatar);
+  html += UI_Field('姓名', 'text', '请输入姓名', d.name, true);
+  html += genderField(d.gender);
+  html += UI_Field('出生年月', 'text', 'YYYY-MM', d.birth, true);
+  html += UI_Field('电话', 'tel', '请输入电话', d.phone, true);
+  html += UI_Field('邮箱', 'text', '请输入邮箱', d.email, true);
+  html += '</div>';
+
+  // 校友认证信息
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text-light);padding:12px 20px 6px">校友认证信息 <span style="color:#ee0a24;font-size:11px;font-weight:400">*必填</span></div>';
+  html += '<div class="comp-cell-group inset">';
+  html += UI_Field('学校', 'text', '请输入学校', d.school, true);
+  html += UI_Field('院系', 'text', '请输入院系', d.dept, true);
+  html += UI_Field('专业', 'text', '请输入专业', d.major, true);
+  html += UI_Field('入学年份', 'text', '例如：2005级', d.year, true);
+  html += degreeField(d.degree);
+  html += '</div>';
+
+  // 其它信息
+  html += '<div style="font-size:13px;font-weight:600;color:var(--text-light);padding:12px 20px 6px">其它信息 <span style="font-size:11px;font-weight:400;color:var(--text-lighter)">（选填）</span></div>';
+  html += '<div class="comp-cell-group inset">';
+  html += UI_Field('籍贯', 'text', '请输入籍贯', d.hometown);
+  html += UI_Field('现住城市', 'text', '请输入现住城市', d.city);
+  html += UI_Field('个人标签', 'text', '用逗号分隔', d.tags);
+  html += UI_Field('兴趣爱好', 'text', '用逗号分隔，如：篮球,摄影', d.hobbies);
+  html += UI_Field('个人简介', 'textarea', '简单介绍一下自己...', d.intro);
+  html += '</div>';
+
+  html += '<div style="padding:20px 16px"><span data-action="submit-profile-edit" data-role="' + role + '">' + UI_Button(btnText, 'primary', '', true, true) + '</span></div>';
+  html += '</div></div>';
+  return html;
 };
 
 Views.ProfileMemberEdit = function() {
-  return '<div class="page-container">' + UI_NavBar('会员信息', true)
-    + UI_Field('公司名称', 'text', '请输入公司名称') + UI_Field('职务', 'text', '请输入职务')
-    + UI_Field('所在城市', 'text', '请输入城市') + UI_Field('行业', 'text', '请输入行业')
-    + UI_Field('个人简介', 'textarea', '请输入个人简介...')
-    + '<div style="padding:12px 16px">' + UI_Button('保存', 'primary', '', true, true) + '</div></div>';
+  var role = AppState.currentRole;
+  var isMember = roleRank[role] >= 2;
+
+  // 初始化状态
+  if (!uiState.selectedCompanies) uiState.selectedCompanies = [];
+  if (!uiState.selectedProducts) uiState.selectedProducts = [];
+
+  // ============================
+  // 已是商务会员：展示已维护的商务信息
+  // ============================
+  if (isMember) {
+    // 如果没有已维护的数据，用模拟数据填充（演示用）
+    if (uiState.selectedCompanies.length === 0) {
+      uiState.selectedCompanies = [
+        { logo: img('logo1', 200, 200), name: '北京智控科技有限公司', industry: '人工智能', address: '北京市海淀区中关村软件园', position: '创始人/CEO', joinDate: '2018年6月', intro: '专注于工业智能控制领域，为制造企业提供AI驱动的智能控制解决方案。' },
+        { logo: img('logo2', 200, 200), name: '北京康源生物科技有限公司', industry: '生物医药', address: '北京市昌平区生命科学园', position: '联合创始人', joinDate: '2020年3月', intro: '专注于创新药物研发，以肿瘤免疫治疗为核心方向。' }
+      ];
+    }
+    if (uiState.selectedProducts.length === 0) {
+      uiState.selectedProducts = [
+        { cover: img('prod1', 400, 300), name: '智控工业AI平台', intro: '基于深度学习的工业过程控制和优化平台', features: ['降低能耗15%', '提升产能20%', '实时监控与预警', '兼容主流PLC/DCS系统'], applications: '化工、钢铁、水泥、电力等流程工业领域' },
+        { cover: img('prod2', 400, 300), name: '新型抗肿瘤药物K-101', intro: '针对非小细胞肺癌的新型靶向药物', features: ['高选择性靶向', '低毒副作用', '口服给药', '联合用药潜力'], applications: '非小细胞肺癌（NSCLC）二线治疗' }
+      ];
+    }
+
+    var html = '<div class="page-container" style="background:#f5f6fa">' + UI_NavBar('商务信息', true);
+
+    // 会员状态卡
+    html += '<div style="margin:12px 16px;padding:16px;background:linear-gradient(135deg,#fff8e1,#fef3c7);border-radius:14px;border:1px solid #f0d9a3">';
+    html += '<div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">';
+    html += '<div style="width:36px;height:36px;border-radius:50%;background:linear-gradient(135deg,#dabb6e,#e8c987);display:flex;align-items:center;justify-content:center">' + iconSVG('award', 18, '#fff') + '</div>';
+    html += '<div><div style="font-size:15px;font-weight:700;color:#5c4510">商务会员</div><div style="font-size:11px;color:#9a7a3a">有效期至 2026-12-31</div></div>';
+    html += '</div>';
+    html += '<div style="font-size:12px;color:#7a5d20;line-height:1.6">您已认证为商务会员，以下为您维护的商务信息。如需修改，请联系平台客服或重新提交审核。</div>';
+    html += '</div>';
+
+    // 关联企业
+    html += '<div style="margin:0 16px 12px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.04)">';
+    html += '<div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5">';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<div style="width:4px;height:16px;background:var(--primary);border-radius:2px"></div>';
+    html += '<span style="font-size:15px;font-weight:700;color:#333">关联企业</span>';
+    html += '<span style="font-size:12px;color:#999">' + uiState.selectedCompanies.length + ' 家</span>';
+    html += '</div>';
+    html += '</div>';
+    uiState.selectedCompanies.forEach(function(c) {
+      html += '<div style="padding:14px 16px;border-bottom:1px solid #fafafa">';
+      html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">';
+      html += '<img src="' + c.logo + '" style="width:48px;height:48px;border-radius:10px;flex-shrink:0">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:15px;font-weight:700;color:#222;margin-bottom:4px">' + escapeHtml(c.name) + '</div>';
+      html += '<div style="font-size:13px;color:#666">' + escapeHtml(c.position) + (c.joinDate ? ' · ' + escapeHtml(c.joinDate) : '') + '</div>';
+      html += '</div></div>';
+      html += '<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:#999">';
+      html += '<span style="display:flex;align-items:center;gap:4px">' + iconSVG('location', 11, '#bbb') + escapeHtml(c.address) + '</span>';
+      html += '<span style="display:inline-block;padding:2px 8px;background:#e3f2fd;color:#1976d2;border-radius:4px;font-size:11px">' + escapeHtml(c.industry) + '</span>';
+      html += '</div></div>';
+    });
+    html += '</div>';
+
+    // 关联产品
+    html += '<div style="margin:0 16px 12px;background:#fff;border-radius:14px;overflow:hidden;box-shadow:0 2px 10px rgba(0,0,0,0.04)">';
+    html += '<div style="padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #f5f5f5">';
+    html += '<div style="display:flex;align-items:center;gap:8px">';
+    html += '<div style="width:4px;height:16px;background:#07c160;border-radius:2px"></div>';
+    html += '<span style="font-size:15px;font-weight:700;color:#333">关联产品</span>';
+    html += '<span style="font-size:12px;color:#999">' + uiState.selectedProducts.length + ' 款</span>';
+    html += '</div>';
+    html += '</div>';
+    uiState.selectedProducts.forEach(function(p) {
+      html += '<div style="padding:14px 16px;border-bottom:1px solid #fafafa;display:flex;gap:12px">';
+      html += '<img src="' + p.cover + '" style="width:72px;height:54px;border-radius:8px;flex-shrink:0;object-fit:cover">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:14px;font-weight:600;color:#222;margin-bottom:4px">' + escapeHtml(p.name) + '</div>';
+      html += '<div style="font-size:12px;color:#888;line-height:1.5;margin-bottom:4px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden">' + escapeHtml(p.intro) + '</div>';
+      if (p.features && p.features.length) {
+        html += '<div style="display:flex;flex-wrap:wrap;gap:4px">';
+        p.features.slice(0, 3).forEach(function(f) {
+          html += '<span style="padding:1px 6px;background:#e8f5e9;color:#4caf50;border-radius:3px;font-size:10px">' + escapeHtml(f) + '</span>';
+        });
+        html += '</div>';
+      }
+      html += '</div></div>';
+    });
+    html += '</div>';
+
+    html += '</div>';
+    return html;
+  }
+
+  // ============================
+  // 未认证会员：升级表单
+  // ============================
+  var html = '<div class="page-container">' + UI_NavBar('升级商务会员', true);
+
+  // 顶部说明
+  html += '<div style="padding:16px;background:linear-gradient(135deg,#fff8e1,#fff3cd);margin:0;border-bottom:1px solid #f0d9a3">';
+  html += '<div style="display:flex;align-items:flex-start;gap:8px">';
+  html += '<div style="flex-shrink:0;width:24px;height:24px;border-radius:50%;background:#dabb6e;display:flex;align-items:center;justify-content:center">' + iconSVG('award', 14, '#fff') + '</div>';
+  html += '<div>';
+  html += '<div style="font-size:14px;font-weight:600;color:#7a5d20;margin-bottom:4px">升级商务会员</div>';
+  html += '<div style="font-size:12px;color:#9a7a3a;line-height:1.6">作为认证校友，您只需提交关联的商务信息（关联企业 + 关联产品），即可申请升级为商务会员，享受更多权益。</div>';
+  html += '</div></div></div>';
+
+  // 关联企业部分
+  html += '<div style="margin-top:12px;background:#fff">';
+  html += '<div style="padding:12px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--border)">';
+  html += '<div style="font-size:15px;font-weight:600;color:#333">关联企业</div>';
+  html += '<button class="comp-btn primary small" data-action="add-company">' + iconSVG('plus', 12, '#fff') + ' 添加企业</button>';
+  html += '</div>';
+
+  // 显示已添加的产品
+  if (uiState.selectedProducts.length === 0) {
+    html += '<div style="padding:40px 20px;text-align:center;color:#999;font-size:13px">';
+    html += '<div style="margin-bottom:8px">' + iconSVG('package', 32, '#ddd') + '</div>';
+    html += '<div>请添加您关联的产品</div>';
+    html += '<div style="font-size:12px;color:#bbb;margin-top:4px">建议关联至少1款产品</div>';
+    html += '</div>';
+  } else {
+    html += '<div style="padding:8px">';
+    uiState.selectedProducts.forEach(function(p, idx) {
+      html += '<div style="background:#fafafa;border-radius:8px;padding:12px;margin-bottom:8px;display:flex;align-items:center;gap:10px">';
+      html += '<img src="' + p.cover + '" style="width:44px;height:44px;border-radius:6px;flex-shrink:0;object-fit:cover">';
+      html += '<div style="flex:1;min-width:0">';
+      html += '<div style="font-size:14px;font-weight:600;color:#333;margin-bottom:2px">' + escapeHtml(p.name) + '</div>';
+      html += '<div style="font-size:12px;color:#999;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">' + escapeHtml(p.intro.substring(0, 30)) + (p.intro.length > 30 ? '...' : '') + '</div>';
+      html += '</div>';
+      html += '<button data-action="remove-product" data-index="' + idx + '" style="background:none;border:none;color:#f56c6c;cursor:pointer;padding:6px">' + iconSVG('close', 16, '#f56c6c') + '</button>';
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // 提交按钮区域
+  html += '<div style="padding:20px 16px;margin-top:12px">';
+  html += '<button class="comp-btn primary block" data-action="submit-member-upgrade">提交审核</button>';
+  html += '<div style="margin-top:10px;font-size:12px;color:#999;text-align:center">提交后将由平台审核，预计1-3个工作日内反馈</div>';
+  html += '</div>';
+
+  html += '<div style="height:40px"></div>';
+  html += '</div>';
+  return html;
+};
+
+// ================================================================
+// 添加关联企业表单
+// ================================================================
+Views.AddCompanyForm = function() {
+  // 编辑模式：从uiState.editingCompanyIndex获取索引
+  var editIndex = uiState.editingCompanyIndex;
+  var isEdit = editIndex !== undefined && editIndex !== null;
+  var company = isEdit ? (uiState.selectedCompanies[editIndex] || {}) : {};
+
+  var html = '<div class="page-container">' + UI_NavBar(isEdit ? '编辑企业' : '添加关联企业', true);
+
+  html += '<div style="background:#fff;padding:16px">';
+
+  // 企业LOGO上传
+  html += '<div style="margin-bottom:20px">';
+  html += '<div style="font-size:14px;color:#333;margin-bottom:8px">企业LOGO <span style="color:#f56c6c">*</span></div>';
+  html += '<div style="display:flex;align-items:center;gap:12px">';
+  html += '<img id="company-logo-preview" src="' + (company.logo || img('default-company', 200, 200)) + '" style="width:60px;height:60px;border-radius:8px;border:1px solid var(--border);object-fit:cover">';
+  html += '<button class="comp-btn plain small" data-action="upload-company-logo">选择图片</button>';
+  html += '<input type="file" id="company-logo-input" accept="image/*" style="display:none">';
+  html += '</div></div>';
+
+  // 企业名称
+  html += UI_Field('企业名称', 'text', '请输入企业全称', company.name, true);
+
+  // 所属行业
+  html += UI_Field('所属行业', 'text', '如：人工智能、生物医药', company.industry, true);
+
+  // 企业地址
+  html += UI_Field('企业地址', 'text', '请输入企业详细地址', company.address, true);
+
+  // 任职信息分组
+  html += '<div style="margin:16px 0;padding-top:16px;border-top:1px solid var(--border)">';
+  html += '<div style="font-size:14px;font-weight:600;color:#333;margin-bottom:12px">您的任职信息</div>';
+
+  // 职位
+  html += UI_Field('职位/职务', 'text', '如：创始人/CEO、CTO、产品总监', company.position, true);
+
+  // 入职时间
+  html += UI_Field('入职时间', 'text', '如：2020年6月（可选）', company.joinDate, false);
+
+  html += '</div>';
+
+  // 企业简介
+  html += UI_Field('企业简介', 'textarea', '介绍企业的主营业务、发展历程、核心优势等...', company.intro, true);
+
+  html += '</div>';
+
+  // 保存按钮
+  html += '<div style="padding:16px">';
+  html += '<button class="comp-btn primary block" data-action="save-company">' + (isEdit ? '保存修改' : '添加企业') + '</button>';
+  html += '</div>';
+
+  html += '<div style="height:40px"></div>';
+  html += '</div>';
+  return html;
+};
+
+// ================================================================
+// 添加关联产品表单
+// ================================================================
+Views.AddProductForm = function() {
+  var editIndex = uiState.editingProductIndex;
+  var isEdit = editIndex !== undefined && editIndex !== null;
+  var product = isEdit ? (uiState.selectedProducts[editIndex] || {}) : {};
+
+  var html = '<div class="page-container">' + UI_NavBar(isEdit ? '编辑产品' : '添加关联产品', true);
+
+  html += '<div style="background:#fff;padding:16px">';
+
+  // 产品图上传
+  html += '<div style="margin-bottom:20px">';
+  html += '<div style="font-size:14px;color:#333;margin-bottom:8px">产品图 <span style="color:#f56c6c">*</span></div>';
+  html += '<div style="display:flex;align-items:center;gap:12px">';
+  html += '<img id="product-cover-preview" src="' + (product.cover || img('default-product', 400, 300)) + '" style="width:80px;height:60px;border-radius:6px;border:1px solid var(--border);object-fit:cover">';
+  html += '<button class="comp-btn plain small" data-action="upload-product-cover">选择图片</button>';
+  html += '<input type="file" id="product-cover-input" accept="image/*" style="display:none">';
+  html += '</div></div>';
+
+  // 产品名称
+  html += UI_Field('产品名称', 'text', '请输入产品名称', product.name, true);
+
+  // 产品简介
+  html += UI_Field('产品简介', 'textarea', '简要介绍产品的功能和特点...', product.intro, true);
+
+  // 核心功能
+  html += UI_Field('核心功能', 'textarea', '列举产品的核心功能，一行一个...', product.features ? product.features.join('\n') : '', true);
+
+  // 应用领域
+  html += UI_Field('应用领域', 'text', '如：工业制造、医疗健康、智慧城市', product.applications, true);
+
+  html += '</div>';
+
+  // 保存按钮
+  html += '<div style="padding:16px">';
+  html += '<button class="comp-btn primary block" data-action="save-product">' + (isEdit ? '保存修改' : '添加产品') + '</button>';
+  html += '</div>';
+
+  html += '<div style="height:40px"></div>';
+  html += '</div>';
+  return html;
 };
 
 Views.ProfileSubscribe = function() {
@@ -902,6 +1598,295 @@ Views.ProfilePoints = function() {
   html += '<div style="text-align:center;padding:30px 16px;background:linear-gradient(135deg,#fff8e1,#fff3cd);margin:12px 16px;border-radius:12px"><div style="font-size:40px;font-weight:700;color:var(--accent)">1250</div><div style="font-size:13px;color:var(--text-light);margin-top:4px">当前可用积分</div></div>';
   var records = [{ desc: '每日签到', points: '+10', date: '2026-06-17' }, { desc: '发布动态', points: '+5', date: '2026-06-16' }, { desc: '参加活动', points: '+20', date: '2026-06-15' }, { desc: '分享文章', points: '+5', date: '2026-06-14' }, { desc: '订阅课程', points: '-50', date: '2026-06-13' }];
   html += UI_CellGroup(records.map(function(r) { return { title: r.desc, value: r.points, label: r.date }; }), true);
+  html += '</div>';
+  return html;
+};
+
+// ================================================================
+// 服务机构列表
+// ================================================================
+Views.ServiceProviders = function() {
+  var html = '<div class="page-container">' + UI_NavBar('服务机构', true);
+
+  // 搜索框
+  html += '<div style="padding:8px 16px;background:#fff"><input type="search" placeholder="搜索服务机构" style="width:100%;padding:10px 16px;border:1px solid var(--border);border-radius:20px;font-size:14px"></div>';
+
+  // 分类标签
+  var categories = ['全部', '法律服务', '财务咨询', '人力资源', '管理咨询'];
+  html += '<div style="display:flex;gap:8px;padding:12px 16px;background:#fff;overflow-x:auto;white-space:nowrap">';
+  categories.forEach(function(cat, i) {
+    var active = i === 0 ? ' style="background:var(--primary);color:#fff"' : '';
+    html += '<span' + active + ' style="padding:6px 14px;border-radius:16px;font-size:13px;background:#f5f7fa;color:var(--text);flex-shrink:0">' + cat + '</span>';
+  });
+  html += '</div>';
+
+  // 服务机构卡片列表
+  html += '<div style="padding:12px">';
+  serviceProviders.forEach(function(p) {
+    html += '<div class="provider-card" data-action="nav" data-payload="/service-provider/' + p.id + '" style="background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06)">';
+    html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">';
+    html += '<img src="' + p.avatar + '" style="width:56px;height:56px;border-radius:12px;flex-shrink:0">';
+    html += '<div style="flex:1;min-width:0">';
+    html += '<div style="font-size:16px;font-weight:600;margin-bottom:4px">' + escapeHtml(p.name) + '</div>';
+    html += '<div style="font-size:12px;color:#ff9800">★★★★☆ ' + p.rating + '</div>';
+    html += '<div style="display:flex;align-items:center;margin-top:4px">';
+    html += '<span style="display:inline-block;padding:2px 8px;background:#e3f2fd;color:#1976d2;border-radius:4px;font-size:11px;margin-right:6px">' + p.category + '</span>';
+    html += '<span style="font-size:11px;color:#999">' + p.serviceCount + ' 项服务</span>';
+    html += '</div></div>';
+    html += iconSVG('arrow-right', 16, '#ccc');
+    html += '</div>';
+    html += '<div style="font-size:13px;color:var(--text-light);line-height:1.6;margin-bottom:10px">' + p.desc + '</div>';
+    html += '<div style="display:flex;align-items:center;justify-content:space-around;padding-top:10px;border-top:1px solid var(--border)">';
+    html += '<div style="text-align:center"><div style="font-size:16px;font-weight:600;color:var(--primary)">' + p.consultCount + '</div><div style="font-size:11px;color:var(--text-lighter);margin-top:2px">咨询人次</div></div>';
+    html += '<div style="width:1px;height:24px;background:var(--border)"></div>';
+    html += '<div style="text-align:center"><div style="font-size:16px;font-weight:600;color:var(--primary)">' + p.serviceCount + '</div><div style="font-size:11px;color:var(--text-lighter);margin-top:2px">服务项目</div></div>';
+    html += '</div></div>';
+  });
+  html += '</div></div>';
+  return html;
+};
+
+// ================================================================
+// 服务机构详情
+// ================================================================
+Views.ServiceProviderDetail = function() {
+  var id = parseInt(Router.params.id);
+  var provider = serviceProviders.find(function(p) { return p.id == id; });
+  if (!provider) return UI_Error();
+
+  var projects = serviceProjects.filter(function(p) { return p.providerId == id; });
+
+  // 按子分类分组
+  var projectsByCategory = {};
+  projects.forEach(function(p) {
+    if (!projectsByCategory[p.category]) projectsByCategory[p.category] = [];
+    projectsByCategory[p.category].push(p);
+  });
+
+  // 查找该服务的父分类
+  function getParentCategory(subCat) {
+    for (var parent in serviceCategoryMap) {
+      if (serviceCategoryMap[parent].indexOf(subCat) >= 0) return parent;
+    }
+    return '其他';
+  }
+
+  var html = '<div class="page-container">' + UI_NavBar('服务机构详情', true);
+
+  // 机构头部
+  html += '<div style="text-align:center;padding:20px;background:#fff;border-bottom:1px solid var(--border)">';
+  html += '<img src="' + provider.avatar + '" style="width:72px;height:72px;border-radius:16px;margin-bottom:12px">';
+  html += '<div style="font-size:18px;font-weight:700;margin-bottom:6px">' + escapeHtml(provider.name) + '</div>';
+  html += '<span style="display:inline-block;padding:4px 12px;background:#e3f2fd;color:#1976d2;border-radius:12px;font-size:13px">' + escapeHtml(provider.category) + '</span>';
+  html += '<div style="display:inline-flex;align-items:center;gap:4px;margin-top:8px;font-size:13px;color:var(--text-light)">';
+  html += iconSVG('phone', 14, 'currentColor') + '<span>' + provider.phone + '</span>';
+  html += '</div>';
+  // 显示该机构提供的服务分类
+  var serviceCats = Object.keys(projectsByCategory);
+  if (serviceCats.length > 0) {
+    html += '<div style="margin-top:10px;display:flex;flex-wrap:wrap;gap:6px;justify-content:center">';
+    serviceCats.forEach(function(sub) {
+      var parent = getParentCategory(sub);
+      html += '<span style="font-size:11px;padding:2px 8px;background:#fff7e8;color:#cc7a00;border-radius:10px">' + escapeHtml(parent) + ' · ' + escapeHtml(sub) + '</span>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // 标签页
+  html += '<div style="display:flex;background:#fff;border-bottom:1px solid var(--border)">';
+  html += '<div style="flex:1;padding:12px;text-align:center;font-size:15px;font-weight:600;color:var(--primary);border-bottom:2px solid var(--primary)">服务项目</div>';
+  html += '<div style="flex:1;padding:12px;text-align:center;font-size:15px;color:var(--text-light)">机构简介</div>';
+  html += '</div>';
+
+  // 服务项目列表 - 按子分类分组
+  if (!projects.length) {
+    html += UI_Empty('暂无服务项目');
+  } else {
+    html += '<div style="padding:12px">';
+    Object.keys(projectsByCategory).forEach(function(subCat) {
+      var subProjects = projectsByCategory[subCat];
+      var parentCat = getParentCategory(subCat);
+      // 分组标题
+      html += '<div style="padding:8px 4px 12px;display:flex;align-items:center;gap:6px">';
+      html += '<div style="width:4px;height:14px;background:#1976d2;border-radius:2px"></div>';
+      html += '<span style="font-size:14px;font-weight:600;color:#333">' + escapeHtml(subCat) + '</span>';
+      html += '<span style="font-size:11px;color:#999">· ' + escapeHtml(parentCat) + '</span>';
+      html += '<span style="font-size:11px;color:#999;margin-left:auto">' + subProjects.length + '项</span>';
+      html += '</div>';
+
+      subProjects.forEach(function(proj) {
+        html += '<div class="project-card" data-action="nav" data-payload="/service-project/' + proj.id + '" style="background:#fff;border-radius:12px;padding:14px;margin-bottom:12px;box-shadow:0 2px 8px rgba(0,0,0,0.06)">';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">';
+        html += '<div style="font-size:16px;font-weight:600;flex:1">' + escapeHtml(proj.name) + '</div>';
+        html += '<span style="display:inline-block;padding:2px 8px;background:#e8f5e9;color:#4caf50;border-radius:4px;font-size:11px">' + escapeHtml(proj.category) + '</span>';
+        html += '</div>';
+        html += '<div style="font-size:13px;color:var(--text-light);line-height:1.6;margin-bottom:10px">' + proj.desc + '</div>';
+        html += '<div style="display:flex;align-items:center;justify-content:space-between">';
+        html += '<div style="display:flex;align-items:baseline;gap:2px">';
+        html += '<span style="font-size:20px;font-weight:700;color:var(--primary)">¥' + proj.price.toLocaleString() + '</span>';
+        html += '<span style="font-size:12px;color:var(--text-lighter)">/ ' + proj.unit + '</span>';
+        html += '</div>';
+        html += '<div style="font-size:12px;color:var(--text-lighter)">';
+        html += iconSVG('eye', 12, 'currentColor') + ' ' + proj.viewCount + '  ';
+        html += iconSVG('bag', 12, 'currentColor') + ' ' + proj.orderCount;
+        html += '</div></div>';
+        html += '<div style="margin-top:10px"><button class="comp-btn primary small" data-action="nav" data-payload="/service-chat/' + proj.providerId + '/' + proj.id + '" onclick="event.stopPropagation()">' + iconSVG('chat', 14, '#fff') + ' 咨询</button></div>';
+        html += '</div>';
+      });
+    });
+    html += '</div>';
+  }
+
+  html += '</div>';
+  return html;
+};
+// 临时文件：服务项目详情视图
+// 这段代码需要添加到 views.js 的末尾
+
+// ================================================================
+// 服务项目详情
+// ================================================================
+Views.ServiceProjectDetail = function() {
+  var id = parseInt(Router.params.id);
+  var project = serviceProjects.find(function(p) { return p.id == id; });
+  if (!project) return UI_Error();
+
+  var provider = serviceProviders.find(function(p) { return p.id == project.providerId; });
+
+  var html = '<div class="page-container">' + UI_NavBar('服务详情', true);
+
+  // 查找父分类
+  var parentCategory = '其他';
+  for (var parent in serviceCategoryMap) {
+    if (serviceCategoryMap[parent].indexOf(project.category) >= 0) {
+      parentCategory = parent;
+      break;
+    }
+  }
+
+  // 项目头部
+  html += '<div style="padding:20px;background:#fff;border-bottom:1px solid var(--border)">';
+  html += '<div style="font-size:20px;font-weight:700;margin-bottom:8px">' + escapeHtml(project.name) + '</div>';
+  // 分类展示：父分类 + 子分类
+  html += '<div style="display:flex;flex-wrap:wrap;gap:6px">';
+  html += '<span style="display:inline-block;padding:4px 12px;background:#fff7e8;color:#cc7a00;border-radius:12px;font-size:13px">' + escapeHtml(parentCategory) + '</span>';
+  html += '<span style="display:inline-block;padding:4px 12px;background:#e8f5e9;color:#4caf50;border-radius:12px;font-size:13px">' + escapeHtml(project.category) + '</span>';
+  html += '</div>';
+
+  if (provider) {
+    html += '<div data-action="nav" data-payload="/service-provider/' + provider.id + '" style="display:inline-flex;align-items:center;gap:6px;margin-top:12px;padding:6px 12px;background:#f5f7fa;border-radius:20px;font-size:13px">';
+    html += '<img src="' + provider.avatar + '" style="width:24px;height:24px;border-radius:50%">';
+    html += '<span>' + escapeHtml(provider.name) + '</span>';
+    html += iconSVG('arrow-right', 12, 'currentColor');
+    html += '</div>';
+  }
+  html += '</div>';
+
+  // 价格区域
+  html += '<div style="padding:16px 20px;background:linear-gradient(135deg,#fef5e7,#fff);border-bottom:1px solid var(--border)">';
+  html += '<div style="font-size:13px;color:var(--text-light);margin-bottom:4px">服务费用</div>';
+  html += '<div style="display:flex;align-items:baseline;gap:4px">';
+  html += '<span style="font-size:28px;font-weight:700;color:#f56c6c">¥' + project.price.toLocaleString() + '</span>';
+  html += '<span style="font-size:14px;color:var(--text-lighter)">/ ' + project.unit + '</span>';
+  html += '</div></div>';
+
+  // 服务介绍
+  html += '<div style="padding:16px 20px;background:#fff;margin-top:12px">';
+  html += '<div style="font-size:16px;font-weight:600;margin-bottom:10px">服务介绍</div>';
+  html += '<div style="font-size:14px;line-height:1.8;color:var(--text)">' + project.desc + '</div>';
+  html += '</div>';
+
+  // 服务详情
+  html += '<div style="padding:16px 20px;background:#fff;margin-top:12px">';
+  html += '<div style="font-size:16px;font-weight:600;margin-bottom:10px">服务详情</div>';
+  html += UI_CellGroup([
+    { title: '服务周期', value: '根据实际情况协商' },
+    { title: '服务方式', value: '线上 + 线下' },
+    { title: '响应时间', value: '24 小时内' }
+  ], false);
+  html += '</div>';
+
+  // 浏览与订单统计
+  html += '<div style="padding:16px 20px;background:#fff;margin-top:12px">';
+  html += UI_CellGroup([
+    { title: '浏览人次', value: project.viewCount + ' 次' },
+    { title: '已购订单', value: project.orderCount + ' 单' }
+  ], false);
+  html += '</div>';
+
+  // 底部操作栏
+  html += '<div style="position:fixed;bottom:0;left:0;right:0;padding:10px 16px;background:#fff;border-top:1px solid var(--border);z-index:10">';
+  html += '<button class="comp-btn primary block" data-action="nav" data-payload="/service-chat/' + project.providerId + '/' + project.id + '">' + iconSVG('chat', 16, '#fff') + ' 咨询</button>';
+  html += '<div style="margin-top:10px"><button class="comp-btn success block" data-action="order-service" data-project-id="' + project.id + '">' + iconSVG('bag', 16, '#fff') + ' 预约购买</button></div>';
+  html += '</div>';
+
+  html += '<div style="height:120px"></div>'; // 底部空白占位
+  html += '</div>';
+  return html;
+};
+
+// ================================================================
+// 服务咨询聊天页面 - 与运营后台统一风格
+// ================================================================
+Views.ServiceChat = function() {
+  var providerId = parseInt(Router.params.providerId);
+  var projectId = parseInt(Router.params.projectId);
+
+  var provider = serviceProviders.find(function(p) { return p.id == providerId; });
+  var project = serviceProjects.find(function(p) { return p.id == projectId; });
+
+  if (!provider || !project) return UI_Error();
+
+  // 获取聊天记录
+  var chatKey = providerId + '-' + projectId;
+  var messages = serviceChatHistory[chatKey] || [
+    { from: 'other', text: '您好，欢迎咨询！请问有什么可以帮到您的？', time: '10:30' },
+    { from: 'me', text: '我想咨询「' + project.name + '」这项服务', time: '10:31' },
+    { from: 'other', text: '好的，我们会有专人尽快与您联系。请留下您的联系方式。', time: '10:32' }
+  ];
+
+  // 如果是新对话，初始化历史记录
+  if (!serviceChatHistory[chatKey]) {
+    serviceChatHistory[chatKey] = messages;
+  }
+
+  var html = '<div class="page-container" style="display:flex;flex-direction:column;height:100vh;padding:0">';
+
+  // 顶部导航栏
+  html += UI_NavBar(provider.name, true);
+
+  // 当前咨询服务提示
+  html += '<div style="background:#fff;border-bottom:1px solid var(--border);padding:8px 16px;flex-shrink:0">';
+  html += '<div style="display:flex;align-items:center;gap:8px;padding:6px 10px;background:#fff7e8;border-left:3px solid #ff976a;border-radius:4px">';
+  html += iconSVG('info', 14, '#ff976a');
+  html += '<span style="font-size:13px;color:#333">当前咨询：' + escapeHtml(project.name) + '</span>';
+  html += '</div></div>';
+
+  // 聊天消息容器
+  html += '<div class="chat-container" style="flex:1;overflow-y:auto;padding:12px;background:#f5f7fa;padding-bottom:70px">';
+
+  messages.forEach(function(msg) {
+    var isMine = msg.from === 'me';
+    html += '<div style="margin-bottom:14px;display:flex;flex-direction:column;' + (isMine ? 'align-items:flex-end' : 'align-items:flex-start') + '">';
+    html += '<div style="max-width:70%;padding:10px 14px;border-radius:12px;font-size:14px;line-height:1.5;word-break:break-word;' +
+            (isMine
+              ? 'background:linear-gradient(135deg,#6fa4cf,#9bc1de);color:#fff;border-bottom-right-radius:4px'
+              : 'background:#fff;color:#303133;border-bottom-left-radius:4px') +
+            '">' + escapeHtml(msg.text) + '</div>';
+    html += '<div style="font-size:11px;color:#c0c4cc;margin-top:4px">' + msg.time + '</div>';
+    html += '</div>';
+  });
+
+  html += '</div>';
+
+  // 底部输入框 - 提高z-index确保可见
+  html += '<div style="position:fixed;bottom:0;left:0;right:0;padding:8px 12px;background:#fff;border-top:1px solid var(--border);z-index:1000">';
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+  html += '<input type="text" id="chat-input" placeholder="输入消息..." onkeypress="if(event.keyCode==13){document.querySelector(\'[data-action=send-chat-message]\').click();return false;}" style="flex:1;padding:8px 12px;border:1px solid #dcdfe6;border-radius:4px;font-size:14px;outline:none;box-sizing:border-box">';
+  html += '<button class="comp-btn primary small" data-action="send-chat-message" data-provider-id="' + providerId + '" data-project-id="' + projectId + '">发送</button>';
+  html += '</div></div>';
+
   html += '</div>';
   return html;
 };
